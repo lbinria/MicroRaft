@@ -54,6 +54,7 @@
         <module>microraft-metrics</module>
         <module>microraft-store-sqlite</module>
         <module>microraft-tutorial</module>
+        <module>microraft-validation</module>
     </modules>
 
     <properties>
@@ -90,6 +91,7 @@
         <maven.install.plugin.version>3.1.0</maven.install.plugin.version>
         <nexus.staging.maven.plugin.version>1.6.13</nexus.staging.maven.plugin.version>
         <maven.gpg.plugin.version>1.6</maven.gpg.plugin.version>
+        <maven.javadoc.skip>true</maven.javadoc.skip>
     </properties>
 
     <dependencies>
