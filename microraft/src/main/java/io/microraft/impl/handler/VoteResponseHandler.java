@@ -60,8 +60,12 @@ public class VoteResponseHandler extends AbstractResponseHandler<VoteResponse> {
 
     @Override
     protected void handleResponse(@Nonnull VoteResponse response) {
+        // Benjamin: Note spec has a guard /\ m.mterm = currentTerm[i]
+        // If condition didn't match, don't commit HandleRequestVoteResponse !
+
         if (state.role() != CANDIDATE) {
             LOGGER.debug("{} Ignored {}. We are not CANDIDATE anymore.", localEndpointStr(), response);
+            // node.getSpec().commitChanges("HandleRequestVoteResponse");
             return;
         } else if (response.getTerm() > state.term()) {
             // If the response term is greater than the local term, update the local term
@@ -69,17 +73,27 @@ public class VoteResponseHandler extends AbstractResponseHandler<VoteResponse> {
             LOGGER.info("{} Moving to new term: {} from current term: {} after {}", localEndpointStr(),
                     response.getTerm(), state.term(), response);
             node.toFollower(response.getTerm());
+            // node.getSpec().commitChanges("HandleRequestVoteResponse");
             return;
         } else if (response.getTerm() < state.term()) {
             LOGGER.warn("{} Stale {} is received, current term: {}", localEndpointStr(), response, state.term());
+            // node.getSpec().commitChanges("HandleRequestVoteResponse");
             return;
         }
 
         CandidateState candidateState = state.candidateState();
         if (response.isGranted() && candidateState.grantVote(response.getSender())) {
+            node.getSpec().getVariable("votesGranted").getField(localEndpoint().getId().toString())
+                    .add(response.getSender().getId().toString());
             LOGGER.info("{} Vote granted from {} for term: {}, number of votes: {}, majority: {}", localEndpointStr(),
                     response.getSender().getId(), state.term(), candidateState.voteCount(), candidateState.majority());
         }
+        // Benjamin: No variable equivalent for votesResponded in Microraft
+        // implementation
+        node.getSpec().getVariable("votesResponded").getField(localEndpoint().getId().toString())
+                .add(response.getSender().getId().toString());
+
+        node.getSpec().commitChanges("HandleRequestVoteResponse");
 
         if (candidateState.isMajorityGranted()) {
             LOGGER.info("{} We are the LEADER!", localEndpointStr());

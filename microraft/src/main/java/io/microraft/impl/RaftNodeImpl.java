@@ -59,6 +59,10 @@ import java.util.concurrent.TimeUnit;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
+import io.microraft.impl.util.SpecAccess;
+import io.microraft.tlavalidation.models.messages.RequestVoteRequest;
+import org.lbee.instrumentation.TraceInstrumentation;
+import org.lbee.instrumentation.clock.SharedClock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -151,6 +155,8 @@ import io.microraft.transport.Transport;
  */
 public final class RaftNodeImpl implements RaftNode {
 
+    private TraceInstrumentation spec;
+
     private static final Logger LOGGER = LoggerFactory.getLogger(RaftNode.class);
     private static final int LEADER_ELECTION_TIMEOUT_NOISE_MILLIS = 100;
     private static final long LEADER_BACKOFF_RESET_TASK_PERIOD_MILLIS = 250;
@@ -214,6 +220,7 @@ public final class RaftNodeImpl implements RaftNode {
         this.maxBackoffRounds = getMaxBackoffRounds(config);
         this.random = requireNonNull(random);
         this.clock = requireNonNull(clock);
+        this.spec = SpecAccess.get(localEndpoint.getId().toString());
         populateLifecycleAwareComponents();
     }
 
@@ -1505,6 +1512,10 @@ public final class RaftNodeImpl implements RaftNode {
                 .setLastLogIndex(lastLogEntry.getIndex()).setSticky(sticky).build();
 
         for (RaftEndpoint member : state.remoteVotingMembers()) {
+            final RequestVoteRequest tlaMessage = new RequestVoteRequest(getLocalEndpoint().getId().toString(),
+                    member.getId().toString(), state.term() + 1, lastLogEntry.getTerm(), lastLogEntry.getIndex(), 0);
+            spec.getVariable("messages").apply("AddToBag", tlaMessage);
+            spec.commitChanges("RequestVoteRequest");
             send(member, request);
         }
 
@@ -1528,6 +1539,7 @@ public final class RaftNodeImpl implements RaftNode {
      * would start a new leader election.
      */
     public void preCandidate() {
+
         state.initPreCandidateState();
         int nextTerm = state.term() + 1;
         BaseLogEntry entry = state.log().lastLogOrSnapshotEntry();
@@ -1899,6 +1911,10 @@ public final class RaftNodeImpl implements RaftNode {
 
     public Clock getClock() {
         return clock;
+    }
+
+    public TraceInstrumentation getSpec() {
+        return spec;
     }
 
 }

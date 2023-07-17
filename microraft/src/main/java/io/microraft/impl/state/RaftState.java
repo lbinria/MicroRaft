@@ -37,6 +37,9 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.Map.Entry;
 
+import io.microraft.impl.util.SpecAccess;
+import io.microraft.model.log.BaseLogEntry;
+import io.microraft.tlavalidation.models.messages.RequestVoteRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -433,10 +436,13 @@ public final class RaftState {
         if (role != LEARNER) {
             // If I am a LEARNER, I will stay in this role until I get promoted.
             role = FOLLOWER;
+            SpecAccess.getStateVariable(localEndpoint.getId().toString()).set("Follower");
         }
 
         RaftTermState newTermState = termState.switchTo(term);
         persistTerm(newTermState);
+        SpecAccess.getCurrentTermVariable(localEndpoint.getId().toString())
+                .set(term + 1 /* we add to add 1 because of index base 1 in spec */);
         preCandidateState = null;
         LeaderState currentLeaderState = leaderState;
         leaderState = null;
@@ -502,10 +508,37 @@ public final class RaftState {
         persistTerm(newTermState);
         termState = newTermState;
         leaderState = null;
-        grantVote(newTerm, localEndpoint);
+        // Invert two following line in order to log variable changes in the expected
+        // order of actions
+        // Timeout -> RequestVoteRequest -> HandleVoteRequest
+        // grantVote(newTerm, localEndpoint);
+        // role = CANDIDATE;
         role = CANDIDATE;
+        SpecAccess.getStateVariable(localEndpoint.getId().toString()).set("Candidate");
+        SpecAccess.get(localEndpoint.getId().toString()).commitChanges("Timeout");
+
         candidateState = new CandidateState(leaderElectionQuorumSize());
+
+        // Vote for himself
+        BaseLogEntry lastLogEntry = log().lastLogOrSnapshotEntry();
+
+        final RequestVoteRequest tlaMessage = new RequestVoteRequest(localEndpoint.getId().toString(),
+                localEndpoint.getId().toString(), term() + 1, lastLogEntry.getTerm(), lastLogEntry.getIndex(), 0);
+        SpecAccess.get(localEndpoint.getId().toString()).getVariable("messages").apply("AddToBag", tlaMessage);
+        SpecAccess.get(localEndpoint.getId().toString()).commitChanges("RequestVoteRequest");
+        // votedFor
+        grantVote(newTerm, localEndpoint);
+
+        SpecAccess.get(localEndpoint.getId().toString()).commitChanges("HandleRequestVoteRequest");
+
         candidateState.grantVote(localEndpoint);
+        SpecAccess.get(localEndpoint.getId().toString()).getVariable("votesGranted")
+                .getField(localEndpoint().getId().toString()).add(localEndpoint.getId().toString());
+        SpecAccess.get(localEndpoint.getId().toString()).getVariable("votesResponded")
+                .getField(localEndpoint().getId().toString()).add(localEndpoint.getId().toString());
+        // responded
+        // granted
+        SpecAccess.get(localEndpoint.getId().toString()).commitChanges("HandleRequestVoteResponse");
     }
 
     private void promoteToVotingMember() throws IOException {
@@ -515,6 +548,7 @@ public final class RaftState {
             store.persistAndFlushLocalEndpoint(modelFactory.createRaftEndpointPersistentStateBuilder()
                     .setLocalEndpoint(localEndpoint).setVoting(true).build());
             role = FOLLOWER;
+            SpecAccess.getStateVariable(localEndpoint.getId().toString()).set("Follower");
         }
     }
 
@@ -525,6 +559,7 @@ public final class RaftState {
             store.persistAndFlushLocalEndpoint(modelFactory.createRaftEndpointPersistentStateBuilder()
                     .setLocalEndpoint(localEndpoint).setVoting(false).build());
             role = LEARNER;
+            SpecAccess.getStateVariable(localEndpoint.getId().toString()).set("Learner");
         }
     }
 
@@ -564,6 +599,9 @@ public final class RaftState {
         RaftTermState newTermState = termState.grantVote(term, member);
         persistTerm(newTermState);
         termState = newTermState;
+        // Link to votedFor variable here
+        SpecAccess.get(localEndpoint().getId().toString()).getVariable("votedFor")
+                .getField(localEndpoint().getId().toString()).set(member.getId().toString());
     }
 
     /**
@@ -573,6 +611,8 @@ public final class RaftState {
      */
     public void toLeader(long currentTimeMillis) {
         role = LEADER;
+        SpecAccess.getStateVariable(localEndpoint.getId().toString()).set("Leader");
+        SpecAccess.get(localEndpoint.getId().toString()).commitChanges("BecomeLeader");
         leader(localEndpoint);
         preCandidateState = null;
         candidateState = null;
@@ -596,8 +636,8 @@ public final class RaftState {
     }
 
     /**
-     * Returns true if the given endpoint is a voting member in the effective group members, false
-     * otherwise.
+     * Returns true if the given endpoint is a voting member in the effective group
+     * members, false otherwise.
      */
     public boolean isVotingMember(RaftEndpoint endpoint) {
         return effectiveGroupMembers.isVotingMember(endpoint);
