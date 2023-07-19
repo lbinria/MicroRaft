@@ -34,44 +34,66 @@ RADefault(varName) ==
 RAMapVariables(t) ==
     /\
         IF "currentTerm" \in DOMAIN t
-        THEN currentTerm' = ApplyUpdates(currentTerm, "currentTerm", t.currentTerm)
+        THEN currentTerm' = ApplyUpdates2(currentTerm, "currentTerm", t)
         ELSE TRUE
     /\
         IF "state" \in DOMAIN t
-        THEN state' = ApplyUpdates(state, "state", t.state)
+        THEN state' = ApplyUpdates2(state, "state", t)
         ELSE TRUE
     /\
         IF "votedFor" \in DOMAIN t
-        THEN votedFor' = ApplyUpdates(votedFor, "votedFor", t.votedFor)
+        THEN votedFor' = ApplyUpdates2(votedFor, "votedFor", t)
         ELSE TRUE
     /\
         IF "votesResponded" \in DOMAIN t
-        THEN votesResponded' = ApplyUpdates(votesResponded, "votesResponded", t.votesResponded)
+        THEN votesResponded' = ApplyUpdates2(votesResponded, "votesResponded", t)
         ELSE TRUE
     /\
         IF "votesGranted" \in DOMAIN t
-        THEN votesGranted' = ApplyUpdates(votesGranted, "votesGranted", t.votesGranted)
+        THEN votesGranted' = ApplyUpdates2(votesGranted, "votesGranted", t)
         ELSE TRUE
     /\
         IF "nextIndex" \in DOMAIN t
-        THEN nextIndex' = ApplyUpdates(nextIndex, "nextIndex", t.nextIndex)
+        THEN nextIndex' = ApplyUpdates2(nextIndex, "nextIndex", t)
         ELSE TRUE
     /\
         IF "matchIndex" \in DOMAIN t
-        THEN matchIndex' = ApplyUpdates(matchIndex, "matchIndex", t.matchIndex)
+        THEN matchIndex' = ApplyUpdates2(matchIndex, "matchIndex", t)
         ELSE TRUE
     /\
         IF "messages" \in DOMAIN t
-        THEN messages' = ApplyUpdates(messages, "messages", t.messages)
+        THEN messages' = ApplyUpdates2(messages, "messages", t)
         ELSE TRUE
     /\
         IF "log" \in DOMAIN t
-        THEN log' = ApplyUpdates(log, "log", t.log)
+        THEN log' = ApplyUpdates2(log, "log", t)
         ELSE TRUE
     /\
         IF "commitIndex" \in DOMAIN t
-        THEN commitIndex' = ApplyUpdates(commitIndex, "commitIndex", t.commitIndex)
+        THEN commitIndex' = ApplyUpdates2(commitIndex, "commitIndex", t)
         ELSE TRUE
+
+(* Partial RequestVoteRequest message *)
+PartialRequestVoteRequestMessage(val) ==
+    LET i == val.msource
+    j == val.mdest
+    IN
+    [mtype |-> RequestVoteRequest,
+     mterm |-> IF "mterm" \in DOMAIN val THEN val.mterm ELSE currentTerm[i],
+     mlastLogTerm |-> IF "mlastLogTerm" \in DOMAIN val THEN val.mlastLogTerm ELSE LastTerm(log[i]),
+     mlastLogIndex |-> IF "mlastLogIndex" \in DOMAIN val THEN val.mlastLogIndex ELSE Len(log[i]),
+     msource |->  i,
+     mdest |-> j]
+
+(* Remap some arguments in specific cases before apply operator *)
+RAMapArgs(cur, default, op, args, eventName) ==
+    (* Handle partial messages records on RequestVoteRequest *)
+    (* We need to know event name and check that number of arguments are equal to 1 (one message) *)
+    IF eventName = "RequestVoteRequest" /\ Len(args) = 1 THEN
+        <<PartialRequestVoteRequestMessage(args[1])>>
+    ELSE
+        MapArgsBase(cur, default, op, args, eventName)
+
 
 
 
@@ -97,9 +119,9 @@ IsRequestVote ==
     /\ IsEvent("RequestVoteRequest")
     /\
         \/
-            /\ "src" \in DOMAIN logline
-            /\ "dest" \in DOMAIN logline
-            /\ RequestVote(logline.src, logline.dest)
+            /\ "event_args" \in DOMAIN logline
+            /\ Len(logline.event_args) = 2
+            /\ RequestVote(logline.event_args[1], logline.event_args[2])
         \/
             /\ \E i,j \in Server : RequestVote(i, j)
 
@@ -176,21 +198,6 @@ IsHandleAppendEntriesResponse ==
         j == m.msource IN
         /\ m.mtype = AppendEntriesResponse
         /\ HandleAppendEntriesResponse(i, j, m)
-
-YopA ==
-    \E m \in DOMAIN messages :
-    LET i == m.msource
-    j == m.mdest
-    IN
-    /\ m.mtype = RequestVoteRequest
-    /\ HandleRequestVoteRequest(i, j, m)
-
-YopB ==
-    \E m \in DOMAIN messages :
-    LET i == m.msource
-    j == m.mdest
-    IN
-    UpdateTerm(i, j, m)
 
 HandleRequestVoteRequestAndUpdateTerm ==
     \E m \in DOMAIN messages :
