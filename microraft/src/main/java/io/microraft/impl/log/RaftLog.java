@@ -26,6 +26,7 @@ import java.util.List;
 
 import io.microraft.exception.RaftException;
 import io.microraft.impl.util.ArrayRingbuffer;
+import io.microraft.impl.util.SpecAccess;
 import io.microraft.model.impl.log.DefaultSnapshotEntryOrBuilder;
 import io.microraft.model.log.BaseLogEntry;
 import io.microraft.model.log.LogEntry;

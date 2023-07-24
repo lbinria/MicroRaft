@@ -85,12 +85,19 @@ PartialRequestVoteRequestMessage(val) ==
      msource |->  i,
      mdest |-> j]
 
+PartialEntry(val) ==
+    \E i \in Server, v \in Value :
+    [term  |-> IF "term" \in DOMAIN val THEN val.term ELSE currentTerm[i],
+     value |-> IF "value" \in DOMAIN val THEN val.value ELSE v]
+
 (* Remap some arguments in specific cases before apply operator *)
 RAMapArgs(cur, default, op, args, eventName) ==
     (* Handle partial messages records on RequestVoteRequest *)
     (* We need to know event name and check that number of arguments are equal to 1 (one message) *)
     IF eventName = "RequestVoteRequest" /\ Len(args) = 1 THEN
         <<PartialRequestVoteRequestMessage(args[1])>>
+    ELSE IF eventName = "ClientRequest" /\ Len(args) = 1 THEN
+        <<PartialEntry(args[1])>>
     ELSE
         MapArgsBase(cur, default, op, args, eventName)
 

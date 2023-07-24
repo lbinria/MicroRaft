@@ -505,6 +505,8 @@ public final class RaftState {
         preCandidateState = null;
         int newTerm = term() + 1;
         RaftTermState newTermState = termState.switchTo(newTerm);
+        SpecAccess.getCurrentTermVariable(localEndpoint.getId().toString())
+                .set(newTerm + 1 /* we add to add 1 because of index base 1 in spec */);
         persistTerm(newTermState);
         termState = newTermState;
         leaderState = null;

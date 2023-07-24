@@ -31,4 +31,8 @@ public class SpecAccess {
         return get(name).getVariable("currentTerm").getField(name);
     }
 
+    public static VirtualField getLogVariable(String name) {
+        return get(name).getVariable("log").getField(name);
+    }
+
 }

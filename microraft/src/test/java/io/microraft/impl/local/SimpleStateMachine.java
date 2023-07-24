@@ -220,9 +220,11 @@ public class SimpleStateMachine implements StateMachine, RaftNodeLifecycleAware,
             this.val = val;
         }
 
+        // Note: TLA, should have to change toString implementation, to have only value
+        // as string
         @Override
         public String toString() {
-            return "Apply{" + "val=" + val + '}';
+            return val.toString();
         }
     }
 
