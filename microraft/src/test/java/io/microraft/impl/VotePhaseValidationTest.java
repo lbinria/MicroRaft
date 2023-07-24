@@ -5,9 +5,6 @@ import io.microraft.test.util.BaseTest;
 import org.junit.After;
 import org.junit.Test;
 
-import static io.microraft.RaftRole.FOLLOWER;
-import static org.assertj.core.api.Assertions.assertThat;
-
 public class VotePhaseValidationTest extends BaseTest {
 
     private LocalRaftGroup group;
@@ -20,7 +17,7 @@ public class VotePhaseValidationTest extends BaseTest {
     }
 
     @Test
-    public void testO() {
+    public void electLeaders() {
         group = LocalRaftGroup.start(3);
         RaftNodeImpl leader = group.waitUntilLeaderElected();
 
@@ -31,10 +28,6 @@ public class VotePhaseValidationTest extends BaseTest {
             leader.transferLeadership(follower.getLocalEndpoint()).join();
             leader = group.waitUntilLeaderElected();
         }
-
-        // int term2 = getTerm(newLeader);
-        // assertThat(newLeader).isNotSameAs(leader);
-        // assertThat(term2).isGreaterThan(term1);
-        // assertThat(getRole(leader)).isEqualTo(FOLLOWER);
     }
+
 }

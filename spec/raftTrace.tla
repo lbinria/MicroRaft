@@ -1,21 +1,13 @@
----- MODULE raftTrace ----
+--------------------------- MODULE raftTrace ---------------------------
+(***************************************************************************)
+(* Simplified specification of 2PC *)
+(***************************************************************************)
 
-EXTENDS TLC, Sequences, SequencesExt, Naturals, FiniteSets, Bags, Json, IOUtils, raft
+EXTENDS TLC, Sequences, SequencesExt, Naturals, FiniteSets, Bags, Json, IOUtils, raft, TVOperators, TraceSpec
 
-ASSUME TLCGet("config").mode = "bfs"
+(* Override CONSTANTS *)
 
-VARIABLES l
-(* Read trace *)
-JsonTrace ==
-    IF "TRACE_PATH" \in DOMAIN IOEnv THEN
-        ndJsonDeserialize(IOEnv.TRACE_PATH)
-    ELSE
-        Print(<<"Failed to validate the trace. TRACE_PATH environnement variable was expected.">>, "")
-
-\*JsonTrace ==
-\*        ndJsonDeserialize("/home/me/Projects/Raft/trace-tla.ndjson")
-
-(* Replace Nil by string *)
+(* Replace Nil constant *)
 TraceNil == "null"
 
 (* Replace Server constant *)
@@ -26,35 +18,8 @@ TraceServer ==
 TraceValue ==
     ToSet(JsonTrace[1].Value)
 
-(* Get trace skipping config line *)
-Trace ==
-    SubSeq(JsonTrace, 2, Len(JsonTrace))
-
-(* Generic operators *)
-Replace(cur, val) == val
-AddElement(cur, val) == cur \cup {val}
-AddElements(cur, vals) == cur \cup ToSet(vals)
-RemoveElement(cur, val) == cur \ {val}
-Clear(cur, val) == {}
-AppendElement(cur, val) == Append(cur, val)
-RemoveKey(cur, val) == [k \in DOMAIN cur |-> IF k = val THEN Nil ELSE cur[k]]
-UpdateRec(cur, val) == [k \in DOMAIN cur |-> IF k \in DOMAIN val THEN val[k] ELSE cur[k]]
-AddToBag(cur, val) ==
-    IF val \in DOMAIN cur THEN
-        [cur EXCEPT ![val] = cur[val] + 1]
-    ELSE
-        cur @@ (val :> 1)
-
-RemoveFromBag(cur, val) ==
-    IF val \in DOMAIN cur THEN
-        [cur EXCEPT ![val] = cur[val] - 1]
-    ELSE
-        cur
-
-Add(cur, val) == cur + val
-
 (* Can be extracted from init *)
-Default(varName) ==
+RADefault(varName) ==
     CASE varName = "currentTerm" -> [i \in Server |-> 1]
     []  varName = "state" -> [i \in Server |-> Follower]
     []  varName = "votedFor" -> [i \in Server |-> Nil]
@@ -66,101 +31,71 @@ Default(varName) ==
     []  varName = "log" -> [i \in Server |-> << >>]
     []  varName = "commitIndex" -> [i \in Server |-> 0]
 
-Apply(var, default, op, args) ==
-    CASE op = "Replace" -> Replace(var, args[1])
-    []   op = "AddElement" -> AddElement(var, args[1])
-    []   op = "AddElements" -> AddElements(var, args[1])
-    []   op = "RemoveElement" -> RemoveElement(var, args[1])
-    []   op = "AddToBag" -> AddToBag(var, args[1])
-    []   op = "RemoveFromBag" -> RemoveFromBag(var, args[1])
-    []   op = "Add" -> Add(var, args[1])
-    []   op = "Clear" -> Clear(var, <<>>)
-    []   op = "AppendElement" -> AppendElement(var, args[1])
-    []   op = "RemoveKey" -> RemoveKey(var, args[1])
-    []   op = "UpdateRec" -> UpdateRec(var, args[1])
-    []   op = "Init" -> Replace(var, default)
-    []   op = "InitWithValue" -> UpdateRec(default, args[1])
-
-RECURSIVE ExceptAtPath(_,_,_,_,_)
-LOCAL ExceptAtPath(var, default, path, op, args) ==
-    LET h == Head(path) IN
-    IF Len(path) > 1 THEN
-        [var EXCEPT ![h] = ExceptAtPath(var[h], default[h], Tail(path), op, args)]
-    ELSE
-        [var EXCEPT ![h] = Apply(@, default[h], op, args)]
-
-RECURSIVE ApplyUpdates(_,_,_)
-LOCAL ApplyUpdates(var, varName, updates) ==
-    LET update == Head(updates) IN
-
-    LET applied ==
-        IF Len(update.path) > 0 THEN
-            ExceptAtPath(var, Default(varName), update.path, update.op, update.args)
-        ELSE
-            Apply(var, Default(varName), update.op, update.args)
-    IN
-    IF Len(updates) > 1 THEN
-        ApplyUpdates(applied, varName, Tail(updates))
-    ELSE
-        applied
-
-TraceInit ==
-    /\ l = 1
-    /\ Init
-
-logline ==
-    Trace[l]
-
-MapVariables(t) ==
+RAMapVariables(t) ==
     /\
         IF "currentTerm" \in DOMAIN t
-        THEN currentTerm' = ApplyUpdates(currentTerm, "currentTerm", t.currentTerm)
+        THEN currentTerm' = ApplyUpdates2(currentTerm, "currentTerm", t)
         ELSE TRUE
     /\
         IF "state" \in DOMAIN t
-        THEN state' = ApplyUpdates(state, "state", t.state)
+        THEN state' = ApplyUpdates2(state, "state", t)
         ELSE TRUE
     /\
         IF "votedFor" \in DOMAIN t
-        THEN votedFor' = ApplyUpdates(votedFor, "votedFor", t.votedFor)
+        THEN votedFor' = ApplyUpdates2(votedFor, "votedFor", t)
         ELSE TRUE
     /\
         IF "votesResponded" \in DOMAIN t
-        THEN votesResponded' = ApplyUpdates(votesResponded, "votesResponded", t.votesResponded)
+        THEN votesResponded' = ApplyUpdates2(votesResponded, "votesResponded", t)
         ELSE TRUE
     /\
         IF "votesGranted" \in DOMAIN t
-        THEN votesGranted' = ApplyUpdates(votesGranted, "votesGranted", t.votesGranted)
+        THEN votesGranted' = ApplyUpdates2(votesGranted, "votesGranted", t)
         ELSE TRUE
     /\
         IF "nextIndex" \in DOMAIN t
-        THEN nextIndex' = ApplyUpdates(nextIndex, "nextIndex", t.nextIndex)
+        THEN nextIndex' = ApplyUpdates2(nextIndex, "nextIndex", t)
         ELSE TRUE
     /\
         IF "matchIndex" \in DOMAIN t
-        THEN matchIndex' = ApplyUpdates(matchIndex, "matchIndex", t.matchIndex)
+        THEN matchIndex' = ApplyUpdates2(matchIndex, "matchIndex", t)
         ELSE TRUE
     /\
         IF "messages" \in DOMAIN t
-        THEN messages' = ApplyUpdates(messages, "messages", t.messages)
+        THEN messages' = ApplyUpdates2(messages, "messages", t)
         ELSE TRUE
     /\
         IF "log" \in DOMAIN t
-        THEN log' = ApplyUpdates(log, "log", t.log)
+        THEN log' = ApplyUpdates2(log, "log", t)
         ELSE TRUE
     /\
         IF "commitIndex" \in DOMAIN t
-        THEN commitIndex' = ApplyUpdates(commitIndex, "commitIndex", t.commitIndex)
+        THEN commitIndex' = ApplyUpdates2(commitIndex, "commitIndex", t)
         ELSE TRUE
 
-IsEvent(e) ==
-    \* Equals FALSE if we get past the end of the log, causing model checking to stop.
-    /\ l \in 1..Len(Trace)
-    /\ IF "desc" \in DOMAIN logline THEN logline.desc = e ELSE TRUE
-    /\ l' = l + 1
-    /\ MapVariables(logline)
-\*    /\ Next
-    /\ allLogs' = allLogs \cup {log[i] : i \in Server}
+(* Partial RequestVoteRequest message *)
+PartialRequestVoteRequestMessage(val) ==
+    LET i == val.msource
+    j == val.mdest
+    IN
+    [mtype |-> RequestVoteRequest,
+     mterm |-> IF "mterm" \in DOMAIN val THEN val.mterm ELSE currentTerm[i],
+     mlastLogTerm |-> IF "mlastLogTerm" \in DOMAIN val THEN val.mlastLogTerm ELSE LastTerm(log[i]),
+     mlastLogIndex |-> IF "mlastLogIndex" \in DOMAIN val THEN val.mlastLogIndex ELSE Len(log[i]),
+     msource |->  i,
+     mdest |-> j]
+
+(* Remap some arguments in specific cases before apply operator *)
+RAMapArgs(cur, default, op, args, eventName) ==
+    (* Handle partial messages records on RequestVoteRequest *)
+    (* We need to know event name and check that number of arguments are equal to 1 (one message) *)
+    IF eventName = "RequestVoteRequest" /\ Len(args) = 1 THEN
+        <<PartialRequestVoteRequestMessage(args[1])>>
+    ELSE
+        MapArgsBase(cur, default, op, args, eventName)
+
+
+
 
 IsRestart ==
     /\ IsEvent("Restart")
@@ -184,9 +119,9 @@ IsRequestVote ==
     /\ IsEvent("RequestVoteRequest")
     /\
         \/
-            /\ "src" \in DOMAIN logline
-            /\ "dest" \in DOMAIN logline
-            /\ RequestVote(logline.src, logline.dest)
+            /\ "event_args" \in DOMAIN logline
+            /\ Len(logline.event_args) = 2
+            /\ RequestVote(logline.event_args[1], logline.event_args[2])
         \/
             /\ \E i,j \in Server : RequestVote(i, j)
 
@@ -264,7 +199,20 @@ IsHandleAppendEntriesResponse ==
         /\ m.mtype = AppendEntriesResponse
         /\ HandleAppendEntriesResponse(i, j, m)
 
-TraceNext ==
+HandleRequestVoteRequestAndUpdateTerm ==
+    \E m \in DOMAIN messages :
+    LET i == m.msource
+    j == m.mdest
+    IN
+    /\ m.mtype = RequestVoteRequest
+    /\ HandleRequestVoteRequest(i, j, m) \cdot UpdateTerm(i, j, m)
+
+IsHandleRequestVoteRequestAndUpdateTerm ==
+    /\ IsEvent("HandleRequestVoteRequestAndUpdateTerm")
+    /\ HandleRequestVoteRequestAndUpdateTerm
+
+RATraceNext ==
+    /\
         \/ IsRestart
         \/ IsTimeout
         \/ IsRequestVote
@@ -277,31 +225,24 @@ TraceNext ==
         \/ IsAdvanceCommitIndex
         \/ IsHandleAppendEntriesRequest
         \/ IsHandleAppendEntriesResponse
+        \/ IsHandleRequestVoteRequestAndUpdateTerm
+    /\ allLogs' = allLogs \cup {log[i] : i \in Server}
 
-ComposedNext == TRUE
+TimeoutAndVoteHimself ==
+    \E m1, m2 \in DOMAIN messages :
+    LET i == m1.msource
+    j == m1.mdest
+    IN
+    Timeout(i) \cdot RequestVote(i,j) \cdot HandleRequestVoteRequest(j, i, m1)
+    \cdot HandleRequestVoteResponse(i, j, m2)
 
-TraceSpec ==
-    \* Because of  [A]_v <=> A \/ v=v'  , the following formula is logically
-     \* equivalent to the (canonical) Spec formual  Init /\ [][Next]_vars  .
-     \* However, TLC's breadth-first algorithm does not explore successor
-     \* states of a *seen* state.  Since one or more states may appear one or
-     \* more times in the the trace, the  UNCHANGED vars  combined with the
-     \*  TraceView  that includes  TLCGet("level")  is our workaround.
-    TraceInit /\ [][TraceNext]_<<l, vars>>
 
-TraceAccepted ==
-    LET d == TLCGet("stats").diameter IN
-    IF d - 1 = Len(Trace) THEN TRUE
-    ELSE Print(<<"Failed matching the trace to (a prefix of) a behavior:", Trace[d],
-                    "TLA+ debugger breakpoint hit count " \o ToString(d+1)>>, FALSE)
 
-TraceView ==
-    \* A high-level state  s  can appear multiple times in a system trace.  Including the
-     \* current level in TLC's view ensures that TLC will not stop model checking when  s
-     \* appears the second time in the trace.  Put differently,  TraceView  causes TLC to
-     \* consider  s_i  and s_j  , where  i  and  j  are the positions of  s  in the trace,
-     \* to be different states.
-    <<vars, l>>
+ComposedNext ==
+    \/ HandleRequestVoteRequestAndUpdateTerm
+
+BASE == INSTANCE raft
+BaseSpec == BASE!Init /\ [][BASE!Next \/ ComposedNext]_vars
 
 TraceAlias ==
     [
@@ -317,9 +258,5 @@ TraceAlias ==
             Map |-> ENABLED MapVariables(Trace[TLCGet("level")])
         ]
     ]
-
-
-BASE == INSTANCE raft
-BaseSpec == BASE!Init /\ [][BASE!Next \/ ComposedNext]_BASE!vars
 -----------------------------------------------------------------------------
 =============================================================================
