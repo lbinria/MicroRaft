@@ -26,7 +26,6 @@ import java.util.List;
 
 import io.microraft.exception.RaftException;
 import io.microraft.impl.util.ArrayRingbuffer;
-import io.microraft.impl.util.SpecAccess;
 import io.microraft.model.impl.log.DefaultSnapshotEntryOrBuilder;
 import io.microraft.model.log.BaseLogEntry;
 import io.microraft.model.log.LogEntry;
@@ -289,6 +288,16 @@ public final class RaftLog {
      */
     public int availableCapacity() {
         return (int) (log.getCapacity() - log.size());
+    }
+
+    // Note: TLA I have to add this
+    public boolean isEmpty() {
+        return log.isEmpty();
+    }
+
+    // Note: TLA I have to add this
+    public long count() {
+        return log.size();
     }
 
     /**

@@ -85,6 +85,41 @@ PartialRequestVoteRequestMessage(val) ==
      msource |->  i,
      mdest |-> j]
 
+PartialAppendEntriesRequest(val) ==
+    LET i == val.msource
+    j == val.mdest
+    prevLogIndex == nextIndex[i][j] - 1
+    prevLogTerm == IF prevLogIndex > 0 THEN
+        log[i][prevLogIndex].term
+    ELSE
+        0
+        \* Send up to 1 entry, constrained by the end of the log.
+        lastEntry == Min({Len(log[i]), nextIndex[i][j]})
+        entries == SubSeq(log[i], nextIndex[i][j], lastEntry)
+    IN
+    [mtype |-> AppendEntriesRequest,
+    mterm |-> IF "mterm" \in DOMAIN val THEN val.mterm ELSE currentTerm[i],
+    mprevLogIndex |-> IF "mprevLogIndex" \in DOMAIN val THEN val.mprevLogIndex ELSE prevLogIndex,
+    mprevLogTerm  |-> IF "mprevLogTerm" \in DOMAIN val THEN val.mprevLogTerm ELSE prevLogTerm,
+    mentries |-> IF "mentries" \in DOMAIN val THEN val.mentries ELSE entries,
+    mcommitIndex |-> IF "mcommitIndex" \in DOMAIN val THEN val.mcommitIndex ELSE Min({commitIndex[i], lastEntry}),
+    msource        |-> i,
+    mdest          |-> j
+    ]
+\*       IN Send([mtype          |-> AppendEntriesRequest,
+\*                mterm          |-> currentTerm[i],
+\*                mprevLogIndex  |-> prevLogIndex,
+\*                mprevLogTerm   |-> prevLogTerm,
+\*                mentries       |-> entries,
+\*                \* mlog is used as a history variable for the proof.
+\*                \* It would not exist in a real implementation.
+\*\*                mlog           |-> log[i],
+\*                mcommitIndex   |-> Min({commitIndex[i], lastEntry}),
+\*                msource        |-> i,
+\*                mdest          |-> j])
+
+
+
 PartialEntry(val) ==
     \E i \in Server, v \in Value :
     [term  |-> IF "term" \in DOMAIN val THEN val.term ELSE currentTerm[i],
@@ -98,6 +133,8 @@ RAMapArgs(cur, default, op, args, eventName) ==
         <<PartialRequestVoteRequestMessage(args[1])>>
     ELSE IF eventName = "ClientRequest" /\ Len(args) = 1 THEN
         <<PartialEntry(args[1])>>
+    ELSE IF eventName = "AppendEntries" /\ Len(args) = 1 THEN
+        <<PartialAppendEntriesRequest(args[1])>>
     ELSE
         MapArgsBase(cur, default, op, args, eventName)
 
@@ -159,27 +196,26 @@ IsHandleRequestVoteResponse ==
 
 IsUpdateTerm ==
     /\ IsEvent("UpdateTerm")
-    /\ \E m \in DOMAIN messages :
-        LET i == m.mdest
-        j == m.msource IN
-        UpdateTerm(i, j, m)
+    /\ \E m \in DOMAIN messages : UpdateTerm(m.mdest, m.msource , m)
 
 IsClientRequest ==
     /\ IsEvent("ClientRequest")
     /\
         \/
-            /\ "node" \in DOMAIN logline
-            /\ "val" \in DOMAIN logline
-            /\ ClientRequest(logline.node, logline.val)
-        \/
             /\ \E i \in Server, v \in Value : ClientRequest(i, v)
+        \/
+            /\ "event_args" \in DOMAIN logline
+            /\ Len(logline.event_args) = 2
+            /\ ClientRequest(logline.event_args[1], logline.event_args[2])
 
 IsAppendEntries ==
     /\ IsEvent("AppendEntries")
-    /\ \E m \in DOMAIN messages :
-        LET i == m.mdest
-        j == m.msource IN
-        AppendEntries(i, j)
+    /\
+        \/ \E m \in DOMAIN messages : AppendEntries(m.mdest, m.msource)
+        \/
+            /\ "event_args" \in DOMAIN logline
+            /\ Len(logline.event_args) = 2
+            /\ AppendEntries(logline.event_args[1], logline.event_args[2])
 
 IsAdvanceCommitIndex ==
     /\ IsEvent("AdvanceCommitIndex")
@@ -192,11 +228,14 @@ IsAdvanceCommitIndex ==
 
 IsHandleAppendEntriesRequest ==
     /\ IsEvent("HandleAppendEntriesRequest")
-    /\ \E m \in DOMAIN messages :
-        LET i == m.mdest
-        j == m.msource IN
-        /\ m.mtype = AppendEntriesRequest
-        /\ HandleAppendEntriesRequest(i, j, m)
+    /\
+        \/ \E m \in DOMAIN messages :
+            /\ m.mtype = AppendEntriesRequest
+            /\ HandleAppendEntriesRequest(m.mdest, m.msource, m)
+        \/
+            /\ "event_args" \in DOMAIN logline
+            /\ Len(logline.event_args) = 2
+            /\ \E m \in DOMAIN messages : HandleAppendEntriesRequest(logline.event_args[1], logline.event_args[2], m)
 
 IsHandleAppendEntriesResponse ==
     /\ IsEvent("HandleAppendEntriesResponse")
@@ -208,15 +247,27 @@ IsHandleAppendEntriesResponse ==
 
 HandleRequestVoteRequestAndUpdateTerm ==
     \E m \in DOMAIN messages :
-    LET i == m.msource
-    j == m.mdest
-    IN
-    /\ m.mtype = RequestVoteRequest
-    /\ HandleRequestVoteRequest(i, j, m) \cdot UpdateTerm(i, j, m)
+        LET i == m.mdest
+        j ==  m.msource
+        IN
+        /\ m.mtype = RequestVoteRequest
+        /\ HandleRequestVoteRequest(i, j, m) \cdot UpdateTerm(i, j, m)
+
+HandleAppendEntriesRequestAndUpdateTerm ==
+    \E m \in DOMAIN messages :
+        LET i == m.mdest
+        j == m.msource
+        IN
+        /\ m.mtype = AppendEntriesRequest
+        /\ HandleAppendEntriesRequest(i, j, m) \cdot UpdateTerm(i, j, m)
 
 IsHandleRequestVoteRequestAndUpdateTerm ==
     /\ IsEvent("HandleRequestVoteRequestAndUpdateTerm")
     /\ HandleRequestVoteRequestAndUpdateTerm
+
+IsHandleAppendEntriesRequestAndUpdateTerm ==
+    /\ IsEvent("HandleAppendEntriesRequestAndUpdateTerm")
+    /\ HandleAppendEntriesRequestAndUpdateTerm
 
 RATraceNext ==
     /\
@@ -224,29 +275,30 @@ RATraceNext ==
         \/ IsTimeout
         \/ IsRequestVote
         \/ IsBecomeLeader
+        \/ IsHandleRequestVoteRequestAndUpdateTerm
         \/ IsHandleRequestVoteRequest
         \/ IsHandleRequestVoteResponse
         \/ IsUpdateTerm
         \/ IsClientRequest
         \/ IsAppendEntries
         \/ IsAdvanceCommitIndex
+        \/ IsHandleAppendEntriesRequestAndUpdateTerm
         \/ IsHandleAppendEntriesRequest
         \/ IsHandleAppendEntriesResponse
-        \/ IsHandleRequestVoteRequestAndUpdateTerm
+
     /\ allLogs' = allLogs \cup {log[i] : i \in Server}
 
-TimeoutAndVoteHimself ==
-    \E m1, m2 \in DOMAIN messages :
-    LET i == m1.msource
-    j == m1.mdest
-    IN
-    Timeout(i) \cdot RequestVote(i,j) \cdot HandleRequestVoteRequest(j, i, m1)
-    \cdot HandleRequestVoteResponse(i, j, m2)
-
-
+\*TimeoutAndVoteHimself ==
+\*    \E m1, m2 \in DOMAIN messages :
+\*    LET i == m1.msource
+\*    j == m1.mdest
+\*    IN
+\*    Timeout(i) \cdot RequestVote(i,j) \cdot HandleRequestVoteRequest(j, i, m1)
+\*    \cdot HandleRequestVoteResponse(i, j, m2)
 
 ComposedNext ==
     \/ HandleRequestVoteRequestAndUpdateTerm
+    \/ HandleAppendEntriesRequestAndUpdateTerm
 
 BASE == INSTANCE raft
 BaseSpec == BASE!Init /\ [][BASE!Next \/ ComposedNext]_vars
@@ -260,6 +312,9 @@ TraceAlias ==
             RequestVote |-> ENABLED \E i, j \in Server : RequestVote(i, j),
             HandleRequestVoteRequest |-> ENABLED \E m \in DOMAIN messages : m.mtype = "RequestVoteRequest" /\ HandleRequestVoteRequest(m.mdest, m.msource, m),
             HandleRequestVoteResponse |-> ENABLED \E m \in DOMAIN messages : m.mtype = "RequestVoteResponse" /\ HandleRequestVoteResponse(m.mdest, m.msource, m),
+            HandleAppendEntriesRequest |-> ENABLED \E m \in DOMAIN messages : m.mtype = "AppendEntriesRequest" /\ HandleAppendEntriesRequest(m.mdest, m.msource, m),
+            HandleAppendEntriesResponse |-> ENABLED \E m \in DOMAIN messages : m.mtype = "AppendEntriesResponse" /\ HandleAppendEntriesResponse(m.mdest, m.msource, m),
+            HandleAppendEntriesResponse2 |-> ENABLED \E m \in DOMAIN messages : m.mtype = "AppendEntriesResponse" /\ m.msuccess /\ m.mterm = currentTerm[m.mdest] /\ m.mmatchIndex = 1 /\ HandleAppendEntriesResponse(m.mdest, m.msource, m),
             BecomeLeader |-> ENABLED \E i \in Server : BecomeLeader(i),
             AdvanceCommitIndex |-> ENABLED \E i \in Server : AdvanceCommitIndex(i),
             Map |-> ENABLED MapVariables(Trace[TLCGet("level")])

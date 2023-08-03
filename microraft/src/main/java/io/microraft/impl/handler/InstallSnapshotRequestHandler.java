@@ -30,6 +30,7 @@ import java.util.stream.Collectors;
 
 import javax.annotation.Nonnull;
 
+import io.microraft.impl.util.SpecHelper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -132,7 +133,9 @@ public class InstallSnapshotRequestHandler extends AbstractMessageHandler<Instal
                     request.getTerm(), state.term(), sender.getId());
 
             node.toFollower(request.getTerm());
-
+            // TLA:
+            if (request.getTerm() > state.term())
+                SpecHelper.commitChanges(node.getSpec(), "UpdateTerm");
             if (!request.isSenderLeader()) {
                 return;
             }

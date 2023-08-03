@@ -89,6 +89,7 @@ public final class FollowerState {
      * Sets the next index for follower.
      */
     public void nextIndex(long nextIndex) {
+        System.out.printf("SET NEXT INDEX: %s -> %s.\n", this.nextIndex, nextIndex);
         this.nextIndex = nextIndex;
     }
 

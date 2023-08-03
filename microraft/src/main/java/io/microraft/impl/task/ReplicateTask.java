@@ -22,7 +22,7 @@ import static io.microraft.RaftNodeStatus.UPDATING_RAFT_GROUP_MEMBER_LIST;
 import static io.microraft.RaftNodeStatus.isTerminal;
 import static io.microraft.RaftRole.LEADER;
 
-import io.microraft.impl.util.SpecAccess;
+import io.microraft.impl.util.SpecHelper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -101,8 +101,10 @@ public final class ReplicateTask implements Runnable {
             // Notify spec
             io.microraft.tlavalidation.models.Entry tlaEntry = new io.microraft.tlavalidation.models.Entry(
                     entry.getTerm() + 1 /* +1 because of index base 1 in spec */, entry.getOperation().toString());
-            SpecAccess.getLogVariable(raftNode.getLocalEndpoint().getId().toString()).apply("AppendElement", tlaEntry);
-            SpecAccess.get(raftNode.getLocalEndpoint().getId().toString()).commitChanges("ClientRequest");
+            SpecHelper.getLogVariable(raftNode.getLocalEndpoint().getId().toString()).apply("AppendElement", tlaEntry);
+            SpecHelper.get(raftNode.getLocalEndpoint().getId().toString()).commitChanges("ClientRequest",
+                    new Object[]{raftNode.getLocalEndpoint().getId().toString(), entry.getOperation().toString()});
+            System.out.println("CLIENT REQUEST");
 
             prepareGroupOp(newEntryLogIndex, operation);
 

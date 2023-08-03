@@ -54,15 +54,13 @@ import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.Random;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
-import io.microraft.impl.util.SpecAccess;
+import io.microraft.impl.util.SpecHelper;
 import io.microraft.tlavalidation.models.messages.RequestVoteRequest;
-import org.lbee.instrumentation.TraceInstrumentation;
-import org.lbee.instrumentation.clock.SharedClock;
+import org.lbee.instrumentation.BehaviorRecorder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -155,7 +153,7 @@ import io.microraft.transport.Transport;
  */
 public final class RaftNodeImpl implements RaftNode {
 
-    private TraceInstrumentation spec;
+    private BehaviorRecorder spec;
 
     private static final Logger LOGGER = LoggerFactory.getLogger(RaftNode.class);
     private static final int LEADER_ELECTION_TIMEOUT_NOISE_MILLIS = 100;
@@ -220,7 +218,7 @@ public final class RaftNodeImpl implements RaftNode {
         this.maxBackoffRounds = getMaxBackoffRounds(config);
         this.random = requireNonNull(random);
         this.clock = requireNonNull(clock);
-        this.spec = SpecAccess.get(localEndpoint.getId().toString());
+        this.spec = SpecHelper.get(localEndpoint.getId().toString());
         populateLifecycleAwareComponents();
     }
 
@@ -1390,6 +1388,39 @@ public final class RaftNodeImpl implements RaftNode {
                     + nextIndex);
         }
 
+        io.microraft.model.message.AppendEntriesRequest appendEntriesRequest = (AppendEntriesRequest) request;
+        /*
+         * We add to add 1 because of index base 1 in spec, only if previous log term is
+         * greater than 0 (see logic above)
+         */
+        int tlaPreviousLogTerm = appendEntriesRequest.getPreviousLogTerm() == 0
+                ? 0
+                : appendEntriesRequest.getPreviousLogTerm() + 1;
+        // Map log entries to entry that can be read by TLA trace spec.
+        final List<io.microraft.tlavalidation.models.Entry> tlaEntries = appendEntriesRequest.getLogEntries().stream()
+                .map(e -> new io.microraft.tlavalidation.models.Entry(
+                        e.getTerm() + 1 /* we add to add 1 because of index base 1 in spec */,
+                        e.getOperation().toString()))
+                .collect(toList());
+        // Map request to a request that can be read by TLA trace spec.
+        // TLA: here we have to compute min for loggin, like the spec do, but in
+        // implementation min is computed on receive
+        // Min({Len(log[i]), nextIndex[i][j]})
+        long lastEntryIndex = min(nextIndex + appendEntriesRequestBatchSize, lastLogIndex) + 1;
+        long minCommitIndex = min(appendEntriesRequest.getCommitIndex(), lastEntryIndex);
+
+        io.microraft.tlavalidation.models.messages.AppendEntriesRequest tlaMessage = new io.microraft.tlavalidation.models.messages.AppendEntriesRequest(
+                getLocalEndpoint().getId().toString(), target.getId().toString(),
+                request.getTerm() + 1 /* we add to add 1 because of index base 1 in spec */,
+                (int) appendEntriesRequest.getPreviousLogIndex(), tlaPreviousLogTerm, tlaEntries, (int) minCommitIndex,
+                0);
+        // Notify
+        // SpecAccess.getMessages(getLocalEndpoint().getId().toString()).apply("AddToBag",
+        // tlaMessage);
+        // Commit event
+        SpecHelper.commitChanges(SpecHelper.get(getLocalEndpoint().getId().toString()), "AppendEntries",
+                new Object[]{getLocalEndpoint().getId().toString(), target.getId().toString()});
+
         send(target, request);
 
         if (backoff) {
@@ -1513,9 +1544,11 @@ public final class RaftNodeImpl implements RaftNode {
 
         for (RaftEndpoint member : state.remoteVotingMembers()) {
             final RequestVoteRequest tlaMessage = new RequestVoteRequest(getLocalEndpoint().getId().toString(),
-                    member.getId().toString(), state.term() + 1, lastLogEntry.getTerm(), lastLogEntry.getIndex(), 0);
+                    member.getId().toString(), state.term() + 1, state.log().isEmpty() ? 0 : lastLogEntry.getTerm() + 1,
+                    lastLogEntry.getIndex(), 0);
+            // Just deactivated temporary
             spec.getVariable("messages").apply("AddToBag", tlaMessage);
-            spec.commitChanges("RequestVoteRequest");
+            SpecHelper.commitChanges(spec, "RequestVoteRequest");
             send(member, request);
         }
 
@@ -1612,6 +1645,8 @@ public final class RaftNodeImpl implements RaftNode {
             // because of the Log Matching Property.
             LogEntry entry = log.getLogEntry(quorumMatchIndex);
             if (entry.getTerm() == state.term()) {
+                // SpecAccess.getCommitIndex(getLocalEndpoint().getId().toString()).set(quorumMatchIndex);
+                SpecHelper.commitChanges(SpecHelper.get(getLocalEndpoint().getId().toString()), "AdvanceCommitIndex");
                 commitEntries(quorumMatchIndex);
                 return true;
             } else if (LOGGER.isDebugEnabled()) {
@@ -1619,6 +1654,8 @@ public final class RaftNodeImpl implements RaftNode {
                         + state.term() + " is needed.");
             }
         }
+
+        SpecHelper.commitChanges(SpecHelper.get(getLocalEndpoint().getId().toString()), "AdvanceCommitIndex");
         return false;
     }
 
@@ -1913,7 +1950,7 @@ public final class RaftNodeImpl implements RaftNode {
         return clock;
     }
 
-    public TraceInstrumentation getSpec() {
+    public BehaviorRecorder getSpec() {
         return spec;
     }
 

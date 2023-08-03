@@ -23,6 +23,7 @@ import io.microraft.impl.state.FollowerState;
 import io.microraft.impl.state.LeaderState;
 import io.microraft.impl.state.QueryState;
 import io.microraft.impl.state.RaftState;
+import io.microraft.impl.util.SpecHelper;
 import io.microraft.model.message.AppendEntriesFailureResponse;
 import io.microraft.model.message.AppendEntriesRequest;
 import io.microraft.model.message.AppendEntriesSuccessResponse;
@@ -68,12 +69,17 @@ public class AppendEntriesSuccessResponseHandler extends AbstractResponseHandler
         }
 
         LOGGER.debug("{} received {}.", localEndpointStr(), response);
+        System.out.println("HandleAppendEntriesResponse");
 
         if (updateFollowerIndices(response)) {
+            SpecHelper.commitChanges(node.getSpec(), "HandleAppendEntriesResponse");
+
             if (!node.tryAdvanceCommitIndex()) {
                 trySendAppendRequest(response);
             }
         } else {
+            SpecHelper.commitChanges(node.getSpec(), "HandleAppendEntriesResponse");
+
             node.tryRunQueries();
         }
 
@@ -108,7 +114,15 @@ public class AppendEntriesSuccessResponseHandler extends AbstractResponseHandler
         if (followerLastLogIndex > matchIndex) {
             long newNextIndex = followerLastLogIndex + 1;
             followerState.matchIndex(followerLastLogIndex);
+            // node.getSpec().getVariable("matchIndex").getField(node.getLocalEndpoint().getId().toString())
+            // .getField(follower.getId().toString()).set(followerLastLogIndex);
+
             followerState.nextIndex(newNextIndex);
+
+            // node.getSpec().getVariable("nextIndex").getField(node.getLocalEndpoint().getId().toString())
+            // .getField(follower.getId().toString()).set(newNextIndex);
+
+            System.out.println("HANDLE RESPONSE SUCCESS.");
 
             if (LOGGER.isDebugEnabled()) {
                 LOGGER.debug(localEndpointStr() + " Updated match index: " + followerLastLogIndex + " and next index: "

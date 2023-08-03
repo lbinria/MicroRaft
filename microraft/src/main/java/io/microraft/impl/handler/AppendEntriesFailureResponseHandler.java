@@ -21,6 +21,7 @@ import static io.microraft.RaftRole.LEADER;
 
 import javax.annotation.Nonnull;
 
+import io.microraft.impl.util.SpecHelper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -66,6 +67,7 @@ public class AppendEntriesFailureResponseHandler extends AbstractResponseHandler
             LOGGER.info("{} Switching to term: {} after {} from current term: {}", localEndpointStr(),
                     response.getTerm(), response, state.term());
             node.toFollower(response.getTerm());
+            SpecHelper.commitChanges(node.getSpec(), "UpdateTerm");
             return;
         }
 
@@ -73,9 +75,15 @@ public class AppendEntriesFailureResponseHandler extends AbstractResponseHandler
 
         node.tryAckQuery(response.getQuerySequenceNumber(), response.getSender());
 
+        System.out.println("HandleAppendEntriesResponse");
+
         if (updateNextIndex(response)) {
+            SpecHelper.commitChanges(node.getSpec(), "HandleAppendEntriesResponse");
             node.sendAppendEntriesRequest(response.getSender());
+            return;
         }
+
+        SpecHelper.commitChanges(node.getSpec(), "HandleAppendEntriesResponse");
     }
 
     private boolean updateNextIndex(AppendEntriesFailureResponse response) {
@@ -106,8 +114,10 @@ public class AppendEntriesFailureResponseHandler extends AbstractResponseHandler
                 LOGGER.debug(localEndpointStr() + " Updating next index: " + nextIndex + " for follower: "
                         + follower.getId());
             }
-
+            System.out.println("HANDLE RESPONSE FAIL.");
             followerState.nextIndex(nextIndex);
+            node.getSpec().getVariable("nextIndex").getField(node.getLocalEndpoint().getId().toString())
+                    .getField(follower.getId().toString()).set(nextIndex);
             return true;
         }
 

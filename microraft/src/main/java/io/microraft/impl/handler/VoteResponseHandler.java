@@ -21,6 +21,7 @@ import static io.microraft.RaftRole.CANDIDATE;
 
 import javax.annotation.Nonnull;
 
+import io.microraft.impl.util.SpecHelper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -65,19 +66,20 @@ public class VoteResponseHandler extends AbstractResponseHandler<VoteResponse> {
 
         if (state.role() != CANDIDATE) {
             LOGGER.debug("{} Ignored {}. We are not CANDIDATE anymore.", localEndpointStr(), response);
-            // node.getSpec().commitChanges("HandleRequestVoteResponse");
+            // TLA: nothing to do
             return;
         } else if (response.getTerm() > state.term()) {
             // If the response term is greater than the local term, update the local term
             // and convert to follower (§5.1)
             LOGGER.info("{} Moving to new term: {} from current term: {} after {}", localEndpointStr(),
                     response.getTerm(), state.term(), response);
+            // TLA: to follower with update term
             node.toFollower(response.getTerm());
-            // node.getSpec().commitChanges("HandleRequestVoteResponse");
+            SpecHelper.commitChanges(node.getSpec(), "UpdateTerm");
             return;
         } else if (response.getTerm() < state.term()) {
             LOGGER.warn("{} Stale {} is received, current term: {}", localEndpointStr(), response, state.term());
-            // node.getSpec().commitChanges("HandleRequestVoteResponse");
+            // TLA: nothing to do
             return;
         }
 
@@ -88,12 +90,11 @@ public class VoteResponseHandler extends AbstractResponseHandler<VoteResponse> {
             LOGGER.info("{} Vote granted from {} for term: {}, number of votes: {}, majority: {}", localEndpointStr(),
                     response.getSender().getId(), state.term(), candidateState.voteCount(), candidateState.majority());
         }
-        // Benjamin: No variable equivalent for votesResponded in Microraft
-        // implementation
+        // TLA: No variable equivalent for votesResponded in Microraft implementation
         node.getSpec().getVariable("votesResponded").getField(localEndpoint().getId().toString())
                 .add(response.getSender().getId().toString());
 
-        node.getSpec().commitChanges("HandleRequestVoteResponse");
+        SpecHelper.commitChanges(node.getSpec(), "HandleRequestVoteResponse");
 
         if (candidateState.isMajorityGranted()) {
             LOGGER.info("{} We are the LEADER!", localEndpointStr());
