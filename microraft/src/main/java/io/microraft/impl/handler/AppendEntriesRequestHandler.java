@@ -173,7 +173,7 @@ public class AppendEntriesRequestHandler extends AbstractMessageHandler<AppendEn
             // && log.getLogEntry(idx).getTerm() ==
             // request.getLogEntries().get(0).getTerm()) {
             state.commitIndex(newCommitIndex);
-            // SpecAccess.getCommitIndex(localEndpoint().getId().toString()).set(newCommitIndex);
+            SpecHelper.getCommitIndex(localEndpoint().getId().toString()).set(newCommitIndex);
             // }
         }
 

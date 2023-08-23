@@ -1,7 +1,4 @@
 --------------------------- MODULE raftTrace ---------------------------
-(***************************************************************************)
-(* Simplified specification of 2PC *)
-(***************************************************************************)
 
 EXTENDS TLC, Sequences, SequencesExt, Naturals, FiniteSets, Bags, Json, IOUtils, raft, TVOperators, TraceSpec
 
@@ -34,43 +31,43 @@ RADefault(varName) ==
 RAMapVariables(t) ==
     /\
         IF "currentTerm" \in DOMAIN t
-        THEN currentTerm' = ApplyUpdates2(currentTerm, "currentTerm", t)
+        THEN currentTerm' = MapVariable(currentTerm, "currentTerm", t)
         ELSE TRUE
     /\
         IF "state" \in DOMAIN t
-        THEN state' = ApplyUpdates2(state, "state", t)
+        THEN state' = MapVariable(state, "state", t)
         ELSE TRUE
     /\
         IF "votedFor" \in DOMAIN t
-        THEN votedFor' = ApplyUpdates2(votedFor, "votedFor", t)
+        THEN votedFor' = MapVariable(votedFor, "votedFor", t)
         ELSE TRUE
     /\
         IF "votesResponded" \in DOMAIN t
-        THEN votesResponded' = ApplyUpdates2(votesResponded, "votesResponded", t)
+        THEN votesResponded' = MapVariable(votesResponded, "votesResponded", t)
         ELSE TRUE
     /\
         IF "votesGranted" \in DOMAIN t
-        THEN votesGranted' = ApplyUpdates2(votesGranted, "votesGranted", t)
+        THEN votesGranted' = MapVariable(votesGranted, "votesGranted", t)
         ELSE TRUE
     /\
         IF "nextIndex" \in DOMAIN t
-        THEN nextIndex' = ApplyUpdates2(nextIndex, "nextIndex", t)
+        THEN nextIndex' = MapVariable(nextIndex, "nextIndex", t)
         ELSE TRUE
     /\
         IF "matchIndex" \in DOMAIN t
-        THEN matchIndex' = ApplyUpdates2(matchIndex, "matchIndex", t)
+        THEN matchIndex' = MapVariable(matchIndex, "matchIndex", t)
         ELSE TRUE
     /\
         IF "messages" \in DOMAIN t
-        THEN messages' = ApplyUpdates2(messages, "messages", t)
+        THEN messages' = MapVariable(messages, "messages", t)
         ELSE TRUE
     /\
         IF "log" \in DOMAIN t
-        THEN log' = ApplyUpdates2(log, "log", t)
+        THEN log' = MapVariable(log, "log", t)
         ELSE TRUE
     /\
         IF "commitIndex" \in DOMAIN t
-        THEN commitIndex' = ApplyUpdates2(commitIndex, "commitIndex", t)
+        THEN commitIndex' = MapVariable(commitIndex, "commitIndex", t)
         ELSE TRUE
 
 (* Partial RequestVoteRequest message *)
@@ -86,16 +83,14 @@ PartialRequestVoteRequestMessage(val) ==
      mdest |-> j]
 
 PartialAppendEntriesRequest(val) ==
-    LET i == val.msource
+    LET
+    i == val.msource
     j == val.mdest
     prevLogIndex == nextIndex[i][j] - 1
-    prevLogTerm == IF prevLogIndex > 0 THEN
-        log[i][prevLogIndex].term
-    ELSE
-        0
-        \* Send up to 1 entry, constrained by the end of the log.
-        lastEntry == Min({Len(log[i]), nextIndex[i][j]})
-        entries == SubSeq(log[i], nextIndex[i][j], lastEntry)
+    prevLogTerm == IF prevLogIndex > 0 THEN log[i][prevLogIndex].term ELSE 0
+    \* Send up to 1 entry, constrained by the end of the log.
+    lastEntry == Min({Len(log[i]), nextIndex[i][j]})
+    entries == SubSeq(log[i], nextIndex[i][j], lastEntry)
     IN
     [mtype |-> AppendEntriesRequest,
     mterm |-> IF "mterm" \in DOMAIN val THEN val.mterm ELSE currentTerm[i],
@@ -106,18 +101,6 @@ PartialAppendEntriesRequest(val) ==
     msource        |-> i,
     mdest          |-> j
     ]
-\*       IN Send([mtype          |-> AppendEntriesRequest,
-\*                mterm          |-> currentTerm[i],
-\*                mprevLogIndex  |-> prevLogIndex,
-\*                mprevLogTerm   |-> prevLogTerm,
-\*                mentries       |-> entries,
-\*                \* mlog is used as a history variable for the proof.
-\*                \* It would not exist in a real implementation.
-\*\*                mlog           |-> log[i],
-\*                mcommitIndex   |-> Min({commitIndex[i], lastEntry}),
-\*                msource        |-> i,
-\*                mdest          |-> j])
-
 
 
 PartialEntry(val) ==
@@ -126,17 +109,17 @@ PartialEntry(val) ==
      value |-> IF "value" \in DOMAIN val THEN val.value ELSE v]
 
 (* Remap some arguments in specific cases before apply operator *)
-RAMapArgs(cur, default, op, args, eventName) ==
+RAMapArgs(mapFunction, cur, default, op, args, eventName) ==
     (* Handle partial messages records on RequestVoteRequest *)
     (* We need to know event name and check that number of arguments are equal to 1 (one message) *)
-    IF eventName = "RequestVoteRequest" /\ Len(args) = 1 THEN
+    IF mapFunction = "PartialRequestVoteRequestMessage" THEN
         <<PartialRequestVoteRequestMessage(args[1])>>
-    ELSE IF eventName = "ClientRequest" /\ Len(args) = 1 THEN
+    ELSE IF mapFunction = "PartialEntry" THEN
         <<PartialEntry(args[1])>>
-    ELSE IF eventName = "AppendEntries" /\ Len(args) = 1 THEN
+    ELSE IF mapFunction = "PartialAppendEntriesRequest" THEN
         <<PartialAppendEntriesRequest(args[1])>>
     ELSE
-        MapArgsBase(cur, default, op, args, eventName)
+        MapArgsBase(mapFunction, cur, default, op, args, eventName)
 
 
 
@@ -162,29 +145,31 @@ IsTimeout ==
 IsRequestVote ==
     /\ IsEvent("RequestVoteRequest")
     /\
-        \/
-            /\ "event_args" \in DOMAIN logline
-            /\ Len(logline.event_args) = 2
-            /\ RequestVote(logline.event_args[1], logline.event_args[2])
-        \/
-            /\ \E i,j \in Server : RequestVote(i, j)
+        IF "event_args" \in DOMAIN logline /\ Len(logline.event_args) = 2 THEN
+            RequestVote(logline.event_args[1], logline.event_args[2])
+        ELSE
+            \E i, j \in Server : RequestVote(i, j)
 
 IsBecomeLeader ==
     /\ IsEvent("BecomeLeader")
     /\
-        \/
-            /\ "node" \in DOMAIN logline
-            /\ BecomeLeader(logline.node)
-        \/
-            /\ \E i \in Server : BecomeLeader(i)
+        (* Optimizations *)
+        IF "state" \in DOMAIN logline /\ Len(logline.state) = 1 /\ logline.state[1].op = "Replace" THEN
+            BecomeLeader(logline.state[1].path[1])
+        ELSE
+            \E i \in Server : BecomeLeader(i)
 
 IsHandleRequestVoteRequest ==
     /\ IsEvent("HandleRequestVoteRequest")
-    /\ \E m \in DOMAIN messages :
-        LET i == m.mdest
-        j == m.msource IN
-        /\ m.mtype = RequestVoteRequest
-        /\ HandleRequestVoteRequest(i, j, m)
+    /\
+        IF "event_args" \in DOMAIN logline /\ Len(logline.event_args) = 2 THEN
+            \E m \in DOMAIN messages :
+                /\ m.mtype = RequestVoteRequest
+                /\ m.mdest = logline.event_args[1]
+                /\ m.msource = logline.event_args[2]
+                /\ HandleRequestVoteRequest(logline.event_args[1], logline.event_args[2], m)
+        ELSE
+            \E m \in DOMAIN messages : /\ m.mtype = RequestVoteRequest /\ HandleRequestVoteRequest(m.mdest, m.msource, m)
 
 IsHandleRequestVoteResponse ==
     /\ IsEvent("HandleRequestVoteResponse")
@@ -201,49 +186,56 @@ IsUpdateTerm ==
 IsClientRequest ==
     /\ IsEvent("ClientRequest")
     /\
-        \/
-            /\ \E i \in Server, v \in Value : ClientRequest(i, v)
-        \/
-            /\ "event_args" \in DOMAIN logline
-            /\ Len(logline.event_args) = 2
-            /\ ClientRequest(logline.event_args[1], logline.event_args[2])
+        IF "event_args" \in DOMAIN logline /\ Len(logline.event_args) = 2 THEN
+            ClientRequest(logline.event_args[1], logline.event_args[2])
+        ELSE
+            \E i \in Server, v \in Value : ClientRequest(i, v)
 
 IsAppendEntries ==
     /\ IsEvent("AppendEntries")
     /\
-        \/ \E m \in DOMAIN messages : AppendEntries(m.mdest, m.msource)
-        \/
-            /\ "event_args" \in DOMAIN logline
-            /\ Len(logline.event_args) = 2
-            /\ AppendEntries(logline.event_args[1], logline.event_args[2])
+        IF "event_args" \in DOMAIN logline /\ Len(logline.event_args) = 2 THEN
+            AppendEntries(logline.event_args[1], logline.event_args[2])
+        ELSE
+            \E i, j \in Server : AppendEntries(i, j)
 
 IsAdvanceCommitIndex ==
     /\ IsEvent("AdvanceCommitIndex")
     /\
-        \/
-            /\ "node" \in DOMAIN logline
-            /\ AdvanceCommitIndex(logline.node)
-        \/
-            /\ \E i \in Server : AdvanceCommitIndex(i)
+        IF "event_args" \in DOMAIN logline /\ Len(logline.event_args) = 1 THEN
+            AdvanceCommitIndex(logline.event_args[1])
+        ELSE
+            \E i \in Server : AdvanceCommitIndex(i)
+
 
 IsHandleAppendEntriesRequest ==
     /\ IsEvent("HandleAppendEntriesRequest")
     /\
-        \/ \E m \in DOMAIN messages :
-            /\ m.mtype = AppendEntriesRequest
-            /\ HandleAppendEntriesRequest(m.mdest, m.msource, m)
-        \/
-            /\ "event_args" \in DOMAIN logline
-            /\ Len(logline.event_args) = 2
-            /\ \E m \in DOMAIN messages : HandleAppendEntriesRequest(logline.event_args[1], logline.event_args[2], m)
+        IF "event_args" \in DOMAIN logline /\ Len(logline.event_args) = 2 THEN
+            \E m \in DOMAIN messages :
+                /\ m.mtype = AppendEntriesRequest
+                /\ m.mdest = logline.event_args[1]
+                /\ m.msource = logline.event_args[2]
+                /\ HandleAppendEntriesRequest(logline.event_args[1], logline.event_args[2], m)
+        ELSE
+            \E m \in DOMAIN messages :
+                /\ m.mtype = AppendEntriesRequest
+                /\ HandleAppendEntriesRequest(m.mdest, m.msource, m)
+
 
 IsHandleAppendEntriesResponse ==
     /\ IsEvent("HandleAppendEntriesResponse")
-    /\ \E m \in DOMAIN messages :
-        LET i == m.mdest
-        j == m.msource IN
-        /\ m.mtype = AppendEntriesResponse
-        /\ HandleAppendEntriesResponse(i, j, m)
+    /\
+        IF "event_args" \in DOMAIN logline /\ Len(logline.event_args) = 2 THEN
+            \E m \in DOMAIN messages :
+                /\ m.mtype = AppendEntriesResponse
+                /\ m.mdest = logline.event_args[1]
+                /\ m.msource = logline.event_args[2]
+                /\ HandleAppendEntriesResponse(logline.event_args[1], logline.event_args[2], m)
+        ELSE
+            \E m \in DOMAIN messages :
+                /\ m.mtype = AppendEntriesResponse
+                /\ HandleAppendEntriesResponse(m.mdest, m.msource, m)
 
 HandleRequestVoteRequestAndUpdateTerm ==
     \E m \in DOMAIN messages :

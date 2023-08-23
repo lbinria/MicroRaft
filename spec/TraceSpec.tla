@@ -39,7 +39,7 @@ logline ==
 IsEvent(e) ==
     \* Equals FALSE if we get past the end of the log, causing model checking to stop.
     /\ l \in 1..Len(Trace)
-    /\ IF "desc" \in DOMAIN logline THEN logline.desc = e ELSE TRUE
+    /\ IF "event" \in DOMAIN logline THEN logline.event = e ELSE TRUE
     /\ l' = l + 1
     /\ MapVariables(logline)
 

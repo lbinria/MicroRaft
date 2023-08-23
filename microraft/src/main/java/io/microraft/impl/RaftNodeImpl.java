@@ -1415,7 +1415,7 @@ public final class RaftNodeImpl implements RaftNode {
                 (int) appendEntriesRequest.getPreviousLogIndex(), tlaPreviousLogTerm, tlaEntries, (int) minCommitIndex,
                 0);
         // Notify
-        // SpecAccess.getMessages(getLocalEndpoint().getId().toString()).apply("AddToBag",
+        // SpecHelper.getMessages(getLocalEndpoint().getId().toString()).apply("AddToBag",
         // tlaMessage);
         // Commit event
         SpecHelper.commitChanges(SpecHelper.get(getLocalEndpoint().getId().toString()), "AppendEntries",
@@ -1637,6 +1637,11 @@ public final class RaftNodeImpl implements RaftNode {
         long quorumMatchIndex = findQuorumMatchIndex();
         long commitIndex = state.commitIndex();
         RaftLog log = state.log();
+
+        // TLA
+        String tlaNodeName = getLocalEndpoint().getId().toString();
+        Object[] eventArgs = new Object[]{tlaNodeName};
+
         for (; quorumMatchIndex > commitIndex; quorumMatchIndex--) {
             // Only log entries from the leader’s current term are committed by counting
             // replicas; once an entry
@@ -1645,8 +1650,10 @@ public final class RaftNodeImpl implements RaftNode {
             // because of the Log Matching Property.
             LogEntry entry = log.getLogEntry(quorumMatchIndex);
             if (entry.getTerm() == state.term()) {
-                // SpecAccess.getCommitIndex(getLocalEndpoint().getId().toString()).set(quorumMatchIndex);
-                SpecHelper.commitChanges(SpecHelper.get(getLocalEndpoint().getId().toString()), "AdvanceCommitIndex");
+                SpecHelper.getCommitIndex(getLocalEndpoint().getId().toString()).set(quorumMatchIndex);
+                SpecHelper.commitChanges(SpecHelper.get(getLocalEndpoint().getId().toString()), "AdvanceCommitIndex",
+                        eventArgs);
+                System.out.printf("ADVANCE COMMIT INDEX: %s.\n", quorumMatchIndex);
                 commitEntries(quorumMatchIndex);
                 return true;
             } else if (LOGGER.isDebugEnabled()) {
@@ -1654,8 +1661,9 @@ public final class RaftNodeImpl implements RaftNode {
                         + state.term() + " is needed.");
             }
         }
-
-        SpecHelper.commitChanges(SpecHelper.get(getLocalEndpoint().getId().toString()), "AdvanceCommitIndex");
+        System.out.printf("ADVANCE COMMIT INDEX: %s.\n", commitIndex);
+        SpecHelper.commitChanges(SpecHelper.get(getLocalEndpoint().getId().toString()), "AdvanceCommitIndex",
+                eventArgs);
         return false;
     }
 

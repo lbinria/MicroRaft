@@ -71,14 +71,21 @@ public class AppendEntriesSuccessResponseHandler extends AbstractResponseHandler
         LOGGER.debug("{} received {}.", localEndpointStr(), response);
         System.out.println("HandleAppendEntriesResponse");
 
+        // Receiver
+        String tla_i = localEndpoint().getId().toString();
+        // Sender
+        String tla_j = response.getSender().getId().toString();
+        // Event args
+        Object[] eventArgs = new Object[]{tla_i, tla_j};
+
         if (updateFollowerIndices(response)) {
-            SpecHelper.commitChanges(node.getSpec(), "HandleAppendEntriesResponse");
+            SpecHelper.commitChanges(node.getSpec(), "HandleAppendEntriesResponse", eventArgs);
 
             if (!node.tryAdvanceCommitIndex()) {
                 trySendAppendRequest(response);
             }
         } else {
-            SpecHelper.commitChanges(node.getSpec(), "HandleAppendEntriesResponse");
+            SpecHelper.commitChanges(node.getSpec(), "HandleAppendEntriesResponse", eventArgs);
 
             node.tryRunQueries();
         }

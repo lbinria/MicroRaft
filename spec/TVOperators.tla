@@ -7,8 +7,8 @@ EXTENDS TLC, Sequences, SequencesExt, Naturals, FiniteSets, Bags, Json, IOUtils
 CONSTANT Nil
 (* Operators to override *)
 Default(varName) ==  Print(<<"Trace spec isn't valid, you should override 'Default' operator.">>, Nil)
-MapArgs(cur, default, op, args, eventName) == Print(<<"Trace spec isn't valid, you should override 'MapArgs' operator.">>, Nil)
-MapArgsBase(cur, default, op, args, eventName) == args
+MapArgs(mapFunction, cur, default, op, args, eventName) == Print(<<"Trace spec isn't valid, you should override 'MapArgs' operator.">>, Nil)
+MapArgsBase(mapFunction, cur, default, op, args, eventName) == args
 
 (* Generic operators *)
 Replace(cur, val) == val
@@ -32,6 +32,7 @@ RemoveFromBag(cur, val) ==
         cur
 
 Add(cur, val) == cur + val
+Sub(cur, val) == cur - val
 
 Unchanged(cur, val) == cur
 
@@ -69,8 +70,8 @@ LOCAL ApplyUpdates(var, varName, updates, event) ==
             ExceptAtPath(var, Default(varName), update.path, update.op, update.args)
         ELSE
             LET mapArgs ==
-                IF "mode" \in DOMAIN update /\ update.mode = "map" /\ event # "" THEN
-                    MapArgs(var, Default(varName), update.op, update.args, event)
+                IF "map" \in DOMAIN update THEN
+                    MapArgs(update.map, var, Default(varName), update.op, update.args, event)
                 ELSE
                     update.args
             IN
@@ -81,7 +82,7 @@ LOCAL ApplyUpdates(var, varName, updates, event) ==
     ELSE
         applied
 
-ApplyUpdates2(var, varName, logline) ==
+MapVariable(var, varName, logline) ==
     LET event == IF "desc" \in DOMAIN logline THEN logline.desc ELSE "" IN
     ApplyUpdates(var, varName, logline[varName], event)
 ====
