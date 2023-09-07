@@ -7,24 +7,24 @@ import org.lbee.instrumentation.TLASerializer;
 public class Entry implements TLASerializer {
 
     private final long term;
-    private final String content;
+    private final String val;
 
-    public Entry(long term, String content) {
+    public Entry(long term, String val) {
         this.term = term;
-        this.content = content;
+        this.val = val;
     }
 
     public Entry(JsonObject jsonObject) {
         this.term = jsonObject.get("term").getAsInt();
-        this.content = jsonObject.get("value").getAsString();
+        this.val = jsonObject.get("val").getAsString();
     }
 
     public long getTerm() {
         return term;
     }
 
-    public String getContent() {
-        return content;
+    public String getVal() {
+        return val;
     }
 
     public JsonElement toJson() {
@@ -35,7 +35,7 @@ public class Entry implements TLASerializer {
     public JsonElement tlaSerialize() {
         final JsonObject jsonObject = new JsonObject();
         jsonObject.addProperty("term", term);
-        jsonObject.addProperty("value", content);
+        jsonObject.addProperty("val", val);
         return jsonObject;
     }
 

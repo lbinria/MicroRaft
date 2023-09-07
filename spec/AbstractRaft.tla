@@ -65,9 +65,9 @@ Timeout(s) ==
 (* casts the vote becomes a follower.                                        *)
 (*****************************************************************************)
 Vote(s) == \E cdt \in Server :
-    /\ role[cdt] = "candidate"
+    \* /\ role[cdt] = "candidate"
     /\ \/ term[s] < term[cdt]
-       \/ term[s] = term[cdt] /\ votedFor[s] = None
+       \/ term[s] = term[cdt] /\ votedFor[s] \in {None, cdt}
     /\ role' = [role EXCEPT ![s] = "follower"]
     /\ term' = [term EXCEPT ![s] = term[cdt]]
     /\ votedFor' = [votedFor EXCEPT ![s] = cdt]
@@ -138,7 +138,7 @@ Commit(s) == \E Q \in Quorum :
     /\ commitIdx' = [commitIdx EXCEPT ![s] = @+1]
     /\ UNCHANGED <<entries, role, term, votedFor>>
 
-Next == \E s \in Server :
+Next == \E s \in Server :    
     \/ Timeout(s)
     \/ Vote(s)
     \/ ElectLeader(s)

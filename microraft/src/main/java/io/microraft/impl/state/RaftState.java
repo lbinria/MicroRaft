@@ -436,13 +436,12 @@ public final class RaftState {
         if (role != LEARNER) {
             // If I am a LEARNER, I will stay in this role until I get promoted.
             role = FOLLOWER;
-            SpecHelper.getStateVariable(localEndpoint.getId().toString()).set("Follower");
+            SpecHelper.getRoleVariable(localEndpoint.getId().toString()).set("follower");
         }
 
         RaftTermState newTermState = termState.switchTo(term);
         persistTerm(newTermState);
-        SpecHelper.getCurrentTermVariable(localEndpoint.getId().toString())
-                .set(term + 1 /* we add to add 1 because of index base 1 in spec */);
+
         preCandidateState = null;
         LeaderState currentLeaderState = leaderState;
         leaderState = null;
@@ -505,8 +504,7 @@ public final class RaftState {
         preCandidateState = null;
         int newTerm = term() + 1;
         RaftTermState newTermState = termState.switchTo(newTerm);
-        SpecHelper.getCurrentTermVariable(localEndpoint.getId().toString())
-                .set(newTerm + 1 /* we add to add 1 because of index base 1 in spec */);
+        SpecHelper.getTermVariable(localEndpoint.getId().toString()).set(newTerm);
         persistTerm(newTermState);
         termState = newTermState;
         leaderState = null;
@@ -516,33 +514,17 @@ public final class RaftState {
         // grantVote(newTerm, localEndpoint);
         // role = CANDIDATE;
         role = CANDIDATE;
-        SpecHelper.getStateVariable(localEndpoint.getId().toString()).set("Candidate");
-        SpecHelper.commitChanges(SpecHelper.get(localEndpoint.getId().toString()), "Timeout");
+        SpecHelper.getRoleVariable(localEndpoint.getId().toString()).set("candidate");
 
         candidateState = new CandidateState(leaderElectionQuorumSize());
 
         // Vote for himself
         BaseLogEntry lastLogEntry = log().lastLogOrSnapshotEntry();
 
-        final RequestVoteRequest tlaMessage = new RequestVoteRequest(localEndpoint().getId().toString(),
-                localEndpoint.getId().toString(), term() + 1, log().isEmpty() ? 0 : lastLogEntry.getTerm() + 1,
-                lastLogEntry.getIndex(), 0);
-        // Just deactivated temporary
-        SpecHelper.getMessages(localEndpoint.getId().toString()).apply("AddToBag", tlaMessage);
-        SpecHelper.commitChanges(SpecHelper.get(localEndpoint.getId().toString()), "RequestVoteRequest");
         // votedFor
         grantVote(newTerm, localEndpoint);
-
-        SpecHelper.commitChanges(SpecHelper.get(localEndpoint.getId().toString()), "HandleRequestVoteRequest");
-
         candidateState.grantVote(localEndpoint);
-        SpecHelper.get(localEndpoint.getId().toString()).getVariable("votesGranted")
-                .getField(localEndpoint().getId().toString()).add(localEndpoint.getId().toString());
-        SpecHelper.get(localEndpoint.getId().toString()).getVariable("votesResponded")
-                .getField(localEndpoint().getId().toString()).add(localEndpoint.getId().toString());
-        // responded
-        // granted
-        SpecHelper.commitChanges(SpecHelper.get(localEndpoint.getId().toString()), "HandleRequestVoteResponse");
+        SpecHelper.commitChanges(SpecHelper.get(localEndpoint().getId().toString()), "Timeout");
     }
 
     private void promoteToVotingMember() throws IOException {
@@ -552,7 +534,7 @@ public final class RaftState {
             store.persistAndFlushLocalEndpoint(modelFactory.createRaftEndpointPersistentStateBuilder()
                     .setLocalEndpoint(localEndpoint).setVoting(true).build());
             role = FOLLOWER;
-            SpecHelper.getStateVariable(localEndpoint.getId().toString()).set("Follower");
+            SpecHelper.getRoleVariable(localEndpoint.getId().toString()).set("follower");
         }
     }
 
@@ -563,7 +545,7 @@ public final class RaftState {
             store.persistAndFlushLocalEndpoint(modelFactory.createRaftEndpointPersistentStateBuilder()
                     .setLocalEndpoint(localEndpoint).setVoting(false).build());
             role = LEARNER;
-            SpecHelper.getStateVariable(localEndpoint.getId().toString()).set("Learner");
+            SpecHelper.getRoleVariable(localEndpoint.getId().toString()).set("learner");
         }
     }
 
@@ -615,8 +597,9 @@ public final class RaftState {
      */
     public void toLeader(long currentTimeMillis) {
         role = LEADER;
-        SpecHelper.getStateVariable(localEndpoint.getId().toString()).set("Leader");
-        SpecHelper.commitChanges(SpecHelper.get(localEndpoint.getId().toString()), "BecomeLeader");
+        SpecHelper.getRoleVariable(localEndpoint.getId().toString()).set("leader");
+        SpecHelper.commitChanges(SpecHelper.get(localEndpoint.getId().toString()), "ElectLeader");
+
         leader(localEndpoint);
         preCandidateState = null;
         candidateState = null;

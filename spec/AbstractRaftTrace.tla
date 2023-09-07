@@ -67,15 +67,18 @@ IsTimeout ==
 IsVote ==
     /\ IsEvent("Vote")
     /\
-        IF "event_args" \in DOMAIN logline /\ Len(logline.event_args) = 1 THEN
+        IF "event_args" \in DOMAIN logline /\ Len(logline.event_args) >= 1 THEN
             Vote(logline.event_args[1])
         ELSE
             \E s \in Server : Vote(s)
 
+IsTest ==
+    /\ IsEvent("Vote")
+
 IsElectLeader ==
     /\ IsEvent("ElectLeader")
     /\
-        IF "event_args" \in DOMAIN logline /\ Len(logline.event_args) = 1 THEN
+        IF "event_args" \in DOMAIN logline /\ Len(logline.event_args) >= 1 THEN
             ElectLeader(logline.event_args[1])
         ELSE
             \E s \in Server : ElectLeader(s)
@@ -83,7 +86,7 @@ IsElectLeader ==
 IsResignLeader ==
     /\ IsEvent("ResignLeader")
     /\
-        IF "event_args" \in DOMAIN logline /\ Len(logline.event_args) = 1 THEN
+        IF "event_args" \in DOMAIN logline /\ Len(logline.event_args) >= 1 THEN
             ResignLeader(logline.event_args[1])
         ELSE
             \E s \in Server : ResignLeader(s)
@@ -91,15 +94,16 @@ IsResignLeader ==
 IsAppendEntry ==
     /\ IsEvent("AppendEntry")
     /\
-        IF "event_args" \in DOMAIN logline /\ Len(logline.event_args) = 1 THEN
+        IF "event_args" \in DOMAIN logline /\ Len(logline.event_args) >= 1 THEN
             AppendEntry(logline.event_args[1])
         ELSE
             \E s \in Server : AppendEntry(s)
 
+
 IsLearnEntry ==
     /\ IsEvent("LearnEntry")
     /\
-        IF "event_args" \in DOMAIN logline /\ Len(logline.event_args) = 1 THEN
+        IF "event_args" \in DOMAIN logline /\ Len(logline.event_args) >= 1 THEN
             LearnEntry(logline.event_args[1])
         ELSE
             \E s \in Server : LearnEntry(s)
@@ -107,7 +111,7 @@ IsLearnEntry ==
 IsCommit ==
     /\ IsEvent("Commit")
     /\
-        IF "event_args" \in DOMAIN logline /\ Len(logline.event_args) = 1 THEN
+        IF "event_args" \in DOMAIN logline /\ Len(logline.event_args) >= 1 THEN
             Commit(logline.event_args[1])
         ELSE
             \E s \in Server : Commit(s)
@@ -123,6 +127,17 @@ RATraceNext ==
 
 ComposedNext == FALSE
 
-BASE == INSTANCE AbstractRaft
-BaseSpec == BASE!Init /\ [][BASE!Next \/ ComposedNext]_vars
+\* BASE == INSTANCE AbstractRaft
+BaseSpec == Init /\ [][Next \/ ComposedNext]_vars
+
+TraceAlias ==
+    [
+        len |-> Len(Trace),
+        log     |-> <<l, Trace[l]>>,
+        enabled |-> [
+            Timeout |-> ENABLED (\E s \in Server : Timeout(s) /\ IsTimeout /\ MapVariables(Trace[l])),
+            Vote |-> ENABLED \E s \in Server : Vote(s)
+        ]
+    ]
+
 ====

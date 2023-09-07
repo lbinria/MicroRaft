@@ -4,8 +4,6 @@ import org.lbee.instrumentation.BehaviorRecorder;
 import org.lbee.instrumentation.VirtualField;
 import org.lbee.instrumentation.clock.SharedClock;
 
-import java.io.BufferedWriter;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.util.HashMap;
 
@@ -45,8 +43,20 @@ public class SpecHelper {
         return get(name).getVariable("state").getField(name);
     }
 
+    public static VirtualField getRoleVariable(String name) {
+        return get(name).getVariable("role").getField(name);
+    }
+
+    public static VirtualField getEntries(String name) {
+        return get(name).getVariable("entries").getField(name);
+    }
+
     public static VirtualField getCurrentTermVariable(String name) {
         return get(name).getVariable("currentTerm").getField(name);
+    }
+
+    public static VirtualField getTermVariable(String name) {
+        return get(name).getVariable("term").getField(name);
     }
 
     public static VirtualField getLogVariable(String name) {

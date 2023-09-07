@@ -71,21 +71,12 @@ public class AppendEntriesSuccessResponseHandler extends AbstractResponseHandler
         LOGGER.debug("{} received {}.", localEndpointStr(), response);
         System.out.println("HandleAppendEntriesResponse");
 
-        // Receiver
-        String tla_i = localEndpoint().getId().toString();
-        // Sender
-        String tla_j = response.getSender().getId().toString();
-        // Event args
-        Object[] eventArgs = new Object[]{tla_i, tla_j};
-
         if (updateFollowerIndices(response)) {
-            SpecHelper.commitChanges(node.getSpec(), "HandleAppendEntriesResponse", eventArgs);
 
             if (!node.tryAdvanceCommitIndex()) {
                 trySendAppendRequest(response);
             }
         } else {
-            SpecHelper.commitChanges(node.getSpec(), "HandleAppendEntriesResponse", eventArgs);
 
             node.tryRunQueries();
         }
@@ -121,15 +112,7 @@ public class AppendEntriesSuccessResponseHandler extends AbstractResponseHandler
         if (followerLastLogIndex > matchIndex) {
             long newNextIndex = followerLastLogIndex + 1;
             followerState.matchIndex(followerLastLogIndex);
-            // node.getSpec().getVariable("matchIndex").getField(node.getLocalEndpoint().getId().toString())
-            // .getField(follower.getId().toString()).set(followerLastLogIndex);
-
             followerState.nextIndex(newNextIndex);
-
-            // node.getSpec().getVariable("nextIndex").getField(node.getLocalEndpoint().getId().toString())
-            // .getField(follower.getId().toString()).set(newNextIndex);
-
-            System.out.println("HANDLE RESPONSE SUCCESS.");
 
             if (LOGGER.isDebugEnabled()) {
                 LOGGER.debug(localEndpointStr() + " Updated match index: " + followerLastLogIndex + " and next index: "

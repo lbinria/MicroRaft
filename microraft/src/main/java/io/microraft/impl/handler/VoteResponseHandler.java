@@ -75,7 +75,6 @@ public class VoteResponseHandler extends AbstractResponseHandler<VoteResponse> {
                     response.getTerm(), state.term(), response);
             // TLA: to follower with update term
             node.toFollower(response.getTerm());
-            SpecHelper.commitChanges(node.getSpec(), "UpdateTerm");
             return;
         } else if (response.getTerm() < state.term()) {
             LOGGER.warn("{} Stale {} is received, current term: {}", localEndpointStr(), response, state.term());
@@ -85,16 +84,18 @@ public class VoteResponseHandler extends AbstractResponseHandler<VoteResponse> {
 
         CandidateState candidateState = state.candidateState();
         if (response.isGranted() && candidateState.grantVote(response.getSender())) {
+            // Receiver
+            String tla_i = localEndpoint().getId().toString();
+            // Sender
+            String tla_j = response.getSender().getId().toString();
+            Object[] eventArgs = new Object[]{tla_j, tla_i};
+            SpecHelper.commitChanges(node.getSpec(), "Vote", eventArgs);
+
             node.getSpec().getVariable("votesGranted").getField(localEndpoint().getId().toString())
                     .add(response.getSender().getId().toString());
             LOGGER.info("{} Vote granted from {} for term: {}, number of votes: {}, majority: {}", localEndpointStr(),
                     response.getSender().getId(), state.term(), candidateState.voteCount(), candidateState.majority());
         }
-        // TLA: No variable equivalent for votesResponded in Microraft implementation
-        node.getSpec().getVariable("votesResponded").getField(localEndpoint().getId().toString())
-                .add(response.getSender().getId().toString());
-
-        SpecHelper.commitChanges(node.getSpec(), "HandleRequestVoteResponse");
 
         if (candidateState.isMajorityGranted()) {
             LOGGER.info("{} We are the LEADER!", localEndpointStr());

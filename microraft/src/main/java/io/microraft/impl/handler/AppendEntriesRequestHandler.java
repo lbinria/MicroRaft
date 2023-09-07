@@ -25,6 +25,7 @@ import static java.lang.Math.min;
 import static java.util.Collections.emptyList;
 import static java.util.Objects.requireNonNull;
 
+import java.io.IOException;
 import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.List;
 import java.util.Map.Entry;
@@ -84,10 +85,7 @@ public class AppendEntriesRequestHandler extends AbstractMessageHandler<AppendEn
             if (LOGGER.isDebugEnabled()) {
                 LOGGER.warn(localEndpointStr() + " Stale " + request + " received in current term: " + state.term());
             }
-            // SpecAccess.get(localEndpoint().getId().toString()).getVariable("__infos")
-            // .set(Map.of("d", localEndpoint().getId().toString()));
-            SpecHelper.commitChanges(SpecHelper.get(localEndpoint().getId().toString()), "HandleAppendEntriesRequest",
-                    new Object[]{localEndpoint().getId().toString(), leader.getId().toString()});
+
             node.send(leader, createAppendEntriesFailureResponse(state.term(), 0, 0));
             return;
         }
@@ -102,9 +100,6 @@ public class AppendEntriesRequestHandler extends AbstractMessageHandler<AppendEn
             LOGGER.info("{} Moving to new term: {} and leader: {} from current term: {}.", localEndpointStr(),
                     request.getTerm(), leader.getId(), state.term());
             node.toFollower(request.getTerm());
-            // TLA:
-            if (request.getTerm() > state.term())
-                SpecHelper.commitChanges(node.getSpec(), "UpdateTerm");
         }
 
         if (!leader.equals(state.leader())) {
@@ -120,29 +115,6 @@ public class AppendEntriesRequestHandler extends AbstractMessageHandler<AppendEn
 
             RaftMessage response = createAppendEntriesFailureResponse(request.getTerm(),
                     request.getQuerySequenceNumber(), request.getFlowControlSequenceNumber());
-
-            // AppendEntriesResponse tlaMessage = new
-            // AppendEntriesResponse(localEndpoint().getId().toString(),
-            // leader.getId().toString(), state.term() + 1, true, 0, 0);
-            // SpecAccess.getMessages(localEndpoint().getId().toString()).apply("AddToBag",
-            // tlaMessage);
-
-            // List<io.microraft.tlavalidation.models.Entry> entries =
-            // request.getLogEntries().stream()
-            // .map(e -> new io.microraft.tlavalidation.models.Entry(e.getTerm() + 1,
-            // e.getOperation().toString()))
-            // .collect(Collectors.toList());;
-            // io.microraft.tlavalidation.models.messages.AppendEntriesRequest tlaRequest =
-            // new io.microraft.tlavalidation.models.messages.AppendEntriesRequest(
-            // leader.getId().toString(), localEndpoint().getId().toString(),
-            // request.getTerm(),
-            // (int) request.getPreviousLogIndex(), request.getPreviousLogTerm(), entries,
-            // (int) request.getCommitIndex(), 0);
-            // SpecAccess.getMessages(localEndpoint().getId().toString()).apply("RemoveFromBag",
-            // tlaRequest);
-
-            SpecHelper.commitChanges(SpecHelper.get(localEndpoint().getId().toString()), "HandleAppendEntriesRequest",
-                    new Object[]{localEndpoint().getId().toString(), leader.getId().toString()});
 
             node.send(leader, response);
             return;
@@ -163,18 +135,6 @@ public class AppendEntriesRequestHandler extends AbstractMessageHandler<AppendEn
             // TLA+ spec !
             long newCommitIndex = min(request.getCommitIndex(), lastLogIndex);
             LOGGER.debug("{} Setting commit index: {}.", localEndpointStr(), newCommitIndex);
-            // /\ \/ m.mentries = << >>
-            // \/ /\ m.mentries /= << >>
-            // /\ Len(log[i]) >= index
-            // /\ log[i][index].term = m.mentries[1].term
-            long idx = request.getPreviousLogIndex() + 1;
-            // Note: I add this condition but, shouldn't be necessary
-            // if (request.getLogEntries().isEmpty() || log.count() >= idx
-            // && log.getLogEntry(idx).getTerm() ==
-            // request.getLogEntries().get(0).getTerm()) {
-            state.commitIndex(newCommitIndex);
-            SpecHelper.getCommitIndex(localEndpoint().getId().toString()).set(newCommitIndex);
-            // }
         }
 
         try {
@@ -184,30 +144,10 @@ public class AppendEntriesRequestHandler extends AbstractMessageHandler<AppendEn
                     .setLastLogIndex(lastLogIndex).setQuerySequenceNumber(request.getQuerySequenceNumber())
                     .setFlowControlSequenceNumber(request.getFlowControlSequenceNumber()).build();
 
-            // AppendEntriesResponse tlaMessage = new
-            // AppendEntriesResponse(localEndpoint().getId().toString(),
-            // leader.getId().toString(), state.term() + 1, true,
-            // request.getPreviousLogIndex() + request.getLogEntries().size(), 0);
-
-            // SpecAccess.getMessages(localEndpoint().getId().toString()).apply("AddToBag",
-            // tlaMessage);
-
-            // List<io.microraft.tlavalidation.models.Entry> entries =
-            // request.getLogEntries().stream()
-            // .map(ent -> new io.microraft.tlavalidation.models.Entry(ent.getTerm(),
-            // ent.getOperation().toString()))
-            // .collect(Collectors.toList());;
-            // io.microraft.tlavalidation.models.messages.AppendEntriesRequest tlaRequest =
-            // new io.microraft.tlavalidation.models.messages.AppendEntriesRequest(
-            // leader.getId().toString(), localEndpoint().getId().toString(),
-            // request.getTerm(),
-            // (int) request.getPreviousLogIndex(), request.getPreviousLogTerm(), entries,
-            // (int) request.getCommitIndex(), 0);
-            // SpecAccess.getMessages(localEndpoint().getId().toString()).apply("RemoveFromBag",
-            // tlaRequest);
-
-            SpecHelper.get(localEndpoint().getId().toString()).commitChanges("HandleAppendEntriesRequest",
-                    new Object[]{localEndpoint().getId().toString(), leader.getId().toString()});
+            if (!e.getValue().isEmpty()) {
+                SpecHelper.get(localEndpoint().getId().toString()).commitChanges("LearnEntry",
+                        new Object[]{localEndpoint().getId().toString()});
+            }
 
             node.send(leader, response);
         } catch (Exception ex) {

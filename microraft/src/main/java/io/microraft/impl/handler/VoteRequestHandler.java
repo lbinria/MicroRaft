@@ -63,7 +63,7 @@ public class VoteRequestHandler extends AbstractMessageHandler<VoteRequest> {
     protected void handle(@Nonnull VoteRequest request) {
         requireNonNull(request);
 
-        String eventName = "HandleRequestVoteRequest";
+        String eventName = "Vote";
 
         VoteResponseBuilder responseBuilder = modelFactory.createVoteResponseBuilder().setGroupId(node.getGroupId())
                 .setSender(localEndpoint());
@@ -79,7 +79,6 @@ public class VoteRequestHandler extends AbstractMessageHandler<VoteRequest> {
 
         // Reply false if term < currentTerm (§5.1)
         if (state.term() > candidateTerm) {
-            SpecHelper.commitChanges(node.getSpec(), eventName, eventArgs);
             LOGGER.info("{} Rejecting {} since current term: {} is bigger.", localEndpointStr(), request, state.term());
             node.send(candidate, responseBuilder.setTerm(state.term()).setGranted(false).build());
             if (state.leaderState() != null) {
@@ -103,7 +102,6 @@ public class VoteRequestHandler extends AbstractMessageHandler<VoteRequest> {
                 && !candidate.equals(state.leader())) {
             LOGGER.info("{} Rejecting {} since the leader is still alive...", localEndpointStr(), request);
 
-            SpecHelper.commitChanges(node.getSpec(), eventName, eventArgs);
             node.send(candidate, responseBuilder.setTerm(state.term()).setGranted(false).build());
             return;
         }
@@ -115,14 +113,12 @@ public class VoteRequestHandler extends AbstractMessageHandler<VoteRequest> {
                     state.term(), request);
 
             node.toFollower(candidateTerm);
-            SpecHelper.commitChanges(node.getSpec(), "UpdateTerm");
         }
 
         if (state.leader() != null && !candidate.equals(state.leader())) {
             LOGGER.warn("{} Rejecting {} since we have a leader: {}", localEndpointStr(), request,
                     state.leader().getId());
 
-            SpecHelper.commitChanges(node.getSpec(), eventName, eventArgs);
             node.send(candidate, responseBuilder.setTerm(candidateTerm).setGranted(false).build());
 
             return;
@@ -137,7 +133,9 @@ public class VoteRequestHandler extends AbstractMessageHandler<VoteRequest> {
                         state.votedEndpoint().getId());
             }
 
-            SpecHelper.commitChanges(node.getSpec(), eventName, eventArgs);
+            if (granted)
+                SpecHelper.commitChanges(node.getSpec(), eventName, eventArgs);
+
             node.send(candidate, responseBuilder.setTerm(candidateTerm).setGranted(granted).build());
             return;
         }
@@ -147,8 +145,6 @@ public class VoteRequestHandler extends AbstractMessageHandler<VoteRequest> {
             LOGGER.info("{} Rejecting {} since our last log term: {} is greater.", localEndpointStr(), request,
                     lastLogEntry.getTerm());
 
-            SpecHelper.commitChanges(node.getSpec(), eventName, eventArgs);
-
             node.send(candidate, responseBuilder.setTerm(candidateTerm).setGranted(false).build());
             return;
         }
@@ -156,8 +152,6 @@ public class VoteRequestHandler extends AbstractMessageHandler<VoteRequest> {
         if (lastLogEntry.getTerm() == request.getLastLogTerm() && lastLogEntry.getIndex() > request.getLastLogIndex()) {
             LOGGER.info("{} Rejecting {} since our last log index: {} is greater.", localEndpointStr(), request,
                     lastLogEntry.getIndex());
-
-            SpecHelper.commitChanges(node.getSpec(), eventName, eventArgs);
 
             node.send(candidate, responseBuilder.setTerm(candidateTerm).setGranted(false).build());
             return;

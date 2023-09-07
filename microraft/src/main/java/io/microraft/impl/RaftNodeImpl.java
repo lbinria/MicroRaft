@@ -1409,17 +1409,13 @@ public final class RaftNodeImpl implements RaftNode {
         long lastEntryIndex = min(nextIndex + appendEntriesRequestBatchSize, lastLogIndex) + 1;
         long minCommitIndex = min(appendEntriesRequest.getCommitIndex(), lastEntryIndex);
 
-        io.microraft.tlavalidation.models.messages.AppendEntriesRequest tlaMessage = new io.microraft.tlavalidation.models.messages.AppendEntriesRequest(
-                getLocalEndpoint().getId().toString(), target.getId().toString(),
-                request.getTerm() + 1 /* we add to add 1 because of index base 1 in spec */,
-                (int) appendEntriesRequest.getPreviousLogIndex(), tlaPreviousLogTerm, tlaEntries, (int) minCommitIndex,
-                0);
         // Notify
-        // SpecHelper.getMessages(getLocalEndpoint().getId().toString()).apply("AddToBag",
-        // tlaMessage);
         // Commit event
-        SpecHelper.commitChanges(SpecHelper.get(getLocalEndpoint().getId().toString()), "AppendEntries",
-                new Object[]{getLocalEndpoint().getId().toString(), target.getId().toString()});
+        if (!tlaEntries.isEmpty()) {
+            SpecHelper.getEntries(getLocalEndpoint().getId().toString()).apply("AppendElement", tlaEntries);
+            SpecHelper.commitChanges(SpecHelper.get(getLocalEndpoint().getId().toString()), "AppendEntry",
+                    new Object[]{getLocalEndpoint().getId().toString()});
+        }
 
         send(target, request);
 
@@ -1546,9 +1542,6 @@ public final class RaftNodeImpl implements RaftNode {
             final RequestVoteRequest tlaMessage = new RequestVoteRequest(getLocalEndpoint().getId().toString(),
                     member.getId().toString(), state.term() + 1, state.log().isEmpty() ? 0 : lastLogEntry.getTerm() + 1,
                     lastLogEntry.getIndex(), 0);
-            // Just deactivated temporary
-            spec.getVariable("messages").apply("AddToBag", tlaMessage);
-            SpecHelper.commitChanges(spec, "RequestVoteRequest");
             send(member, request);
         }
 
@@ -1922,6 +1915,7 @@ public final class RaftNodeImpl implements RaftNode {
      */
     public void toFollower(int term) {
         state.toFollower(term);
+        SpecHelper.commitChanges(getSpec(), "ResignLeader", new Object[]{getLocalEndpoint().getId().toString()});
         publishRaftNodeReport(RaftNodeReportReason.ROLE_CHANGE);
     }
 
