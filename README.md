@@ -1,7 +1,62 @@
 
+This fork aims to validate MicroRaft implementation against a raft specification.
+
+# Prerequisites
+
+- Java >= 17
+- Apache maven >= 3.6
+- Python >= 3.9
+- TLA+ >= 1.8.0 (The Clarke release)
+
+### Install the trace validation tools (and TLA+)
+
+See README at https://github.com/lbinria/trace_validation_tools
+
+### Install python librairies
+
+The `ndjson` Python library is needed in order to perform the
+validation; it can be installed with:
+
+`pip install ndjson`
+
+We suppose that `python` and `pip` are the commands for Python and
+its package installer, if otherwise you should change the above line
+and some of the following accordingly.
+
+# Perform trace validation
+
+To check the conformity of the trace produced by the program, the
+shell scripts run_*.sh can be used:
+
+`sh run_VotePhaseValidationTest_abstract_pipeline.sh`
+
+It consists of the following steps:
+- clean old trace files
+- compile implementation of Microraft
+- run a given test case of Microraft
+- [merge trace files / config into one trace file (when different processes produce different trace files)]
+- Run TLC on the resulting trace file
+
+### Perform trace validation on a trace file
+
+Alternatively, we can perform the trace validation on the obtained trace file
+`trace-tla.ndjson` by using the command:
+
+`python tla_trace_validation.py spec/AbstractRaftTrace.tla`
+
+# Directory structure
+
+- `spec/**`: contains Raft specification and trace specification
+- `microraft/**`: contains MicroRaft implementation
+
+____
+
+
 [![Java CI with Maven](https://github.com/MicroRaft/MicroRaft/actions/workflows/maven.yml/badge.svg)](https://github.com/MicroRaft/MicroRaft/actions/workflows/maven.yml) [![CircleCI](https://dl.circleci.com/status-badge/img/gh/MicroRaft/MicroRaft/tree/master.svg?style=svg)](https://dl.circleci.com/status-badge/redirect/gh/MicroRaft/MicroRaft/tree/master) [![Integration](license-apache-2.svg)](https://github.com/MicroRaft/MicroRaft/blob/master/LICENSE)
 
 ![](microraft.io/src/img/microraft-logo.png)
+
+# Microraft
 
 MicroRaft is a feature-complete and stable open-source implementation of the
 Raft consensus algorithm in Java. __It is a single lightweight JAR file of a few
