@@ -1411,11 +1411,13 @@ public final class RaftNodeImpl implements RaftNode {
 
         // Notify
         // Commit event
-        if (!tlaEntries.isEmpty()) {
-            SpecHelper.getEntries(getLocalEndpoint().getId().toString()).apply("AppendElement", tlaEntries);
-            SpecHelper.commitChanges(SpecHelper.get(getLocalEndpoint().getId().toString()), "AppendEntry",
-                    new Object[]{getLocalEndpoint().getId().toString()});
-        }
+        // if (!tlaEntries.isEmpty()) {
+        // SpecHelper.getEntries(getLocalEndpoint().getId().toString()).apply("AppendElement",
+        // tlaEntries);
+        // SpecHelper.commitChanges(SpecHelper.get(getLocalEndpoint().getId().toString()),
+        // "AppendEntry",
+        // new Object[]{getLocalEndpoint().getId().toString()});
+        // }
 
         send(target, request);
 
@@ -1644,8 +1646,8 @@ public final class RaftNodeImpl implements RaftNode {
             LogEntry entry = log.getLogEntry(quorumMatchIndex);
             if (entry.getTerm() == state.term()) {
                 SpecHelper.getCommitIndex(getLocalEndpoint().getId().toString()).set(quorumMatchIndex);
-                SpecHelper.commitChanges(SpecHelper.get(getLocalEndpoint().getId().toString()), "AdvanceCommitIndex",
-                        eventArgs);
+                SpecHelper.commitChanges(SpecHelper.get(getLocalEndpoint().getId().toString()),
+                        "Commit"/* , eventArgs */);
                 System.out.printf("ADVANCE COMMIT INDEX: %s.\n", quorumMatchIndex);
                 commitEntries(quorumMatchIndex);
                 return true;
@@ -1655,8 +1657,8 @@ public final class RaftNodeImpl implements RaftNode {
             }
         }
         System.out.printf("ADVANCE COMMIT INDEX: %s.\n", commitIndex);
-        SpecHelper.commitChanges(SpecHelper.get(getLocalEndpoint().getId().toString()), "AdvanceCommitIndex",
-                eventArgs);
+        // SpecHelper.commitChanges(SpecHelper.get(getLocalEndpoint().getId().toString()),
+        // "Commit", eventArgs);
         return false;
     }
 

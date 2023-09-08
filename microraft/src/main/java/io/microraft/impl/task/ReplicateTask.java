@@ -100,10 +100,13 @@ public final class ReplicateTask implements Runnable {
 
             // Notify spec
             io.microraft.tlavalidation.models.Entry tlaEntry = new io.microraft.tlavalidation.models.Entry(
-                    entry.getTerm() + 1 /* +1 because of index base 1 in spec */, entry.getOperation().toString());
-            SpecHelper.getLogVariable(raftNode.getLocalEndpoint().getId().toString()).apply("AppendElement", tlaEntry);
-            SpecHelper.get(raftNode.getLocalEndpoint().getId().toString()).commitChanges("ClientRequest",
-                    new Object[]{raftNode.getLocalEndpoint().getId().toString(), entry.getOperation().toString()});
+                    entry.getTerm(), entry.getOperation().toString());
+            SpecHelper.getEntries(raftNode.getLocalEndpoint().getId().toString()).apply("AppendElement", tlaEntry);
+            SpecHelper.get(raftNode.getLocalEndpoint().getId().toString())
+                    .commitChanges("AppendEntry"/*
+                                                 * , new Object[]{raftNode.getLocalEndpoint().getId().toString(),
+                                                 * entry.getOperation().toString()}
+                                                 */);
             System.out.println("CLIENT REQUEST");
 
             prepareGroupOp(newEntryLogIndex, operation);
