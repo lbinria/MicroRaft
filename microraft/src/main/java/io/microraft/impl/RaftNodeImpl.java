@@ -1646,8 +1646,7 @@ public final class RaftNodeImpl implements RaftNode {
             LogEntry entry = log.getLogEntry(quorumMatchIndex);
             if (entry.getTerm() == state.term()) {
                 SpecHelper.getCommitIndex(getLocalEndpoint().getId().toString()).set(quorumMatchIndex);
-                SpecHelper.commitChanges(SpecHelper.get(getLocalEndpoint().getId().toString()),
-                        "Commit"/* , eventArgs */);
+                SpecHelper.commitChanges(SpecHelper.get(getLocalEndpoint().getId().toString()), "Commit", eventArgs);
                 System.out.printf("ADVANCE COMMIT INDEX: %s.\n", quorumMatchIndex);
                 commitEntries(quorumMatchIndex);
                 return true;
