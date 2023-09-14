@@ -1,0 +1,10 @@
+{
+    "module": {
+        "extends":"AbstractRaftTrace",
+        "init":"TraceInit",
+        "next":"TraceNext"
+    },
+    "configuration": {
+        "constants": "Server <- TraceServer\nValue <- TraceValue\nQuorum <- TraceQuorum\nMaxTerm <- TraceMaxTerm\nMaxEntries <- TraceMaxEntries\nTerm <- MCTerm\nNil <- TraceNil\nDefault <- RADefault\nVars <- vars\nBaseInit <- Init\nMapVariables <- RAMapVariables\nTraceNext <- RATraceNext\nNone = None"
+    }
+}

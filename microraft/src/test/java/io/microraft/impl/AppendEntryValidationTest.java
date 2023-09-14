@@ -27,8 +27,8 @@ public class AppendEntryValidationTest extends BaseTest {
         leader.replicate(applyValue("v_1")).join();
         RaftNodeImpl follower = group.getAnyNodeExcept(leader.getLocalEndpoint());
         leader.transferLeadership(follower.getLocalEndpoint()).join();
-        // leader = group.waitUntilLeaderElected();
-        // leader.replicate(applyValue("v_6")).join();
+        leader = group.waitUntilLeaderElected();
+        leader.replicate(applyValue("v_6")).join();
     }
 
 }

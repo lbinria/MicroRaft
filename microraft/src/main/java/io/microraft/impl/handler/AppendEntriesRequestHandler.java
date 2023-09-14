@@ -100,6 +100,7 @@ public class AppendEntriesRequestHandler extends AbstractMessageHandler<AppendEn
             LOGGER.info("{} Moving to new term: {} and leader: {} from current term: {}.", localEndpointStr(),
                     request.getTerm(), leader.getId(), state.term());
             node.toFollower(request.getTerm());
+            SpecHelper.getTermVariable(localEndpoint().getId().toString()).set(request.getTerm());
         }
 
         if (!leader.equals(state.leader())) {
@@ -144,17 +145,7 @@ public class AppendEntriesRequestHandler extends AbstractMessageHandler<AppendEn
                     .setLastLogIndex(lastLogIndex).setQuerySequenceNumber(request.getQuerySequenceNumber())
                     .setFlowControlSequenceNumber(request.getFlowControlSequenceNumber()).build();
 
-            if (!e.getValue().isEmpty()) {
-                SpecHelper.get(localEndpoint().getId().toString()).commitChanges("LearnEntry",
-                        new Object[]{localEndpoint().getId().toString()});
-            }
-
             node.send(leader, response);
-        } catch (Exception ex) {
-            // TLA: log commit anyway
-            // SpecAccess.get(localEndpoint().getId().toString()).getVariable("__infos")
-            // .set(Map.of("d", localEndpoint().getId().toString(), "lastLogIndex",
-            // lastLogIndex));
 
         } finally {
             boolean commitIndexAdvanced = (state.commitIndex() > oldCommitIndex);
@@ -169,6 +160,7 @@ public class AppendEntriesRequestHandler extends AbstractMessageHandler<AppendEn
             if (commitIndexAdvanced) {
                 node.tryRunScheduledQueries();
             }
+
         }
     }
 
@@ -279,19 +271,21 @@ public class AppendEntriesRequestHandler extends AbstractMessageHandler<AppendEn
                             localEndpointStr() + " Appending " + newLogEntries.size() + " entries: " + newLogEntries);
                 }
 
-                // Map entries to notify TLA+
-                List<io.microraft.tlavalidation.models.Entry> tlaEntries = newLogEntries.stream()
-                        .map(entry -> new io.microraft.tlavalidation.models.Entry(
-                                entry.getTerm() + 1 /* add one because of index-base 1 */,
-                                entry.getOperation().toString()))
-                        .collect(Collectors.toList());
-                // Notify variable change
-                // if (!tlaEntries.isEmpty())
-                // SpecAccess.getLogVariable(localEndpoint().getId().toString()).apply("AppendElement",
-                // tlaEntries.get(0));
-
                 log.appendEntries(newLogEntries);
                 log.flush();
+                // TLA+: we should log all batch in once, because of no access to
+                // localEndPoint() in log.appendEntries(newLogEntries) function
+                try {
+                    for (LogEntry entry : newLogEntries) {
+                        io.microraft.tlavalidation.models.Entry tlaEntry = new io.microraft.tlavalidation.models.Entry(
+                                entry.getTerm(), entry.getOperation().toString());
+                        SpecHelper.getEntries(localEndpoint().getId().toString()).apply("AppendElement", tlaEntry);
+                        SpecHelper.get(localEndpoint().getId().toString()).commitChanges("LearnEntry",
+                                new Object[]{localEndpoint().getId().toString()});
+                    }
+                } catch (IOException ex) {
+                    throw new RuntimeException(ex);
+                }
             }
         }
 

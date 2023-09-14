@@ -440,7 +440,10 @@ public final class RaftState {
         }
 
         RaftTermState newTermState = termState.switchTo(term);
+
         persistTerm(newTermState);
+        if (termState.getTerm() != term)
+            SpecHelper.getTermVariable(localEndpoint.getId().toString()).set(term);
 
         preCandidateState = null;
         LeaderState currentLeaderState = leaderState;
@@ -459,6 +462,7 @@ public final class RaftState {
         try {
             store.persistAndFlushTerm(modelFactory.createRaftTermPersistentStateBuilder()
                     .setTerm(termStateToPersist.getTerm()).setVotedFor(termStateToPersist.getVotedEndpoint()).build());
+            // SpecHelper.getTermVariable(localEndpoint().getId().toString()).set(termStateToPersist.getTerm());
         } catch (IOException e) {
             throw new RaftException("Failed to persist " + termStateToPersist, null, e);
         }

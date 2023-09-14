@@ -67,7 +67,6 @@ public class AppendEntriesFailureResponseHandler extends AbstractResponseHandler
             LOGGER.info("{} Switching to term: {} after {} from current term: {}", localEndpointStr(),
                     response.getTerm(), response, state.term());
             node.toFollower(response.getTerm());
-            SpecHelper.commitChanges(node.getSpec(), "UpdateTerm");
             return;
         }
 
@@ -84,12 +83,10 @@ public class AppendEntriesFailureResponseHandler extends AbstractResponseHandler
         Object[] eventArgs = new Object[]{tla_i, tla_j};
 
         if (updateNextIndex(response)) {
-            SpecHelper.commitChanges(node.getSpec(), "HandleAppendEntriesResponse", eventArgs);
             node.sendAppendEntriesRequest(response.getSender());
             return;
         }
 
-        SpecHelper.commitChanges(node.getSpec(), "HandleAppendEntriesResponse", eventArgs);
     }
 
     private boolean updateNextIndex(AppendEntriesFailureResponse response) {

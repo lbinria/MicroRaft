@@ -74,7 +74,7 @@ public class InstallSnapshotResponseHandler extends AbstractResponseHandler<Inst
             if (state.role() == LEADER) {
                 LOGGER.warn("{} Ignored invalid response {} for current term: {}", localEndpointStr(), response,
                         state.term());
-                SpecHelper.commitChanges(node.getSpec(), "UpdateTerm");
+
                 return;
             } else if (state.role() != FOLLOWER && state.role() != LEARNER) {
                 // If the request term is greater than the local term,
@@ -83,7 +83,7 @@ public class InstallSnapshotResponseHandler extends AbstractResponseHandler<Inst
                         response.getTerm(), state.term(), response.getSender().getId());
 
                 node.toFollower(response.getTerm());
-                SpecHelper.commitChanges(node.getSpec(), "UpdateTerm");
+
             }
         }
 

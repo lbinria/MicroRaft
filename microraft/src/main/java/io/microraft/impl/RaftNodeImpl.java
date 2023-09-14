@@ -625,6 +625,8 @@ public final class RaftNodeImpl implements RaftNode {
             try {
                 if (shouldTerminate) {
                     toFollower(state.term());
+                    SpecHelper.commitChanges(getSpec(), "ResignLeader",
+                            new Object[]{getLocalEndpoint().getId().toString()});
                 }
                 setStatus(TERMINATED);
                 state.invalidateScheduledQueries();
@@ -1679,6 +1681,7 @@ public final class RaftNodeImpl implements RaftNode {
             // the leader has left the Raft group
             state.invalidateScheduledQueries();
             toFollower(state.term());
+            SpecHelper.commitChanges(getSpec(), "ResignLeader", new Object[]{getLocalEndpoint().getId().toString()});
             terminateComponents();
         }
     }
@@ -1916,7 +1919,6 @@ public final class RaftNodeImpl implements RaftNode {
      */
     public void toFollower(int term) {
         state.toFollower(term);
-        SpecHelper.commitChanges(getSpec(), "ResignLeader", new Object[]{getLocalEndpoint().getId().toString()});
         publishRaftNodeReport(RaftNodeReportReason.ROLE_CHANGE);
     }
 

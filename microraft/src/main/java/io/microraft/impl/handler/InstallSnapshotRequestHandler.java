@@ -133,9 +133,7 @@ public class InstallSnapshotRequestHandler extends AbstractMessageHandler<Instal
                     request.getTerm(), state.term(), sender.getId());
 
             node.toFollower(request.getTerm());
-            // TLA:
-            if (request.getTerm() > state.term())
-                SpecHelper.commitChanges(node.getSpec(), "UpdateTerm");
+
             if (!request.isSenderLeader()) {
                 return;
             }

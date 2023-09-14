@@ -14,6 +14,7 @@ CONSTANTS
     MaxEntries \* bound on the length of the entries for model checking
 
 None == CHOOSE s : s \notin Server
+Term == Nat    \* override for model checking
 
 ASSUME QuorumAssumption ==
     \* Quorums are sets of servers and any two quorums intersect.
@@ -55,7 +56,7 @@ Init ==
 Timeout(s) ==
     /\ role[s] \in {"follower", "candidate"}
     /\ role' = [role EXCEPT ![s] = "candidate"]
-    /\ term' = [term EXCEPT ![s] = @+1]
+    /\ \E t \in Term : t > term[s] /\ term' = [term EXCEPT ![s] = t]
     /\ votedFor' = [votedFor EXCEPT ![s] = s]
     /\ UNCHANGED <<entries, commitIdx>>
 
@@ -65,7 +66,7 @@ Timeout(s) ==
 (* casts the vote becomes a follower.                                        *)
 (*****************************************************************************)
 Vote(s) == \E cdt \in Server :
-    \* /\ role[cdt] = "candidate"
+\*    /\ role[cdt] = "candidate"
     /\ \/ term[s] < term[cdt]
        \/ term[s] = term[cdt] /\ votedFor[s] \in {None, cdt}
     /\ role' = [role EXCEPT ![s] = "follower"]
@@ -89,7 +90,8 @@ ElectLeader(s) ==
 (*****************************************************************************)
 ResignLeader(s) ==
     /\ role' = [role EXCEPT ![s] = "follower"]
-    /\ UNCHANGED <<entries, commitIdx, term, votedFor>>
+    /\ \E t \in Term : t >= term[s] /\ term' = [term EXCEPT ![s] = t]
+    /\ UNCHANGED <<entries, commitIdx, votedFor>>
 
 (*****************************************************************************)
 (* A leader appends a new value to its log.                                  *)
@@ -138,7 +140,7 @@ Commit(s) == \E Q \in Quorum :
     /\ commitIdx' = [commitIdx EXCEPT ![s] = @+1]
     /\ UNCHANGED <<entries, role, term, votedFor>>
 
-Next == \E s \in Server :    
+Next == \E s \in Server :
     \/ Timeout(s)
     \/ Vote(s)
     \/ ElectLeader(s)
@@ -172,8 +174,9 @@ CommitsAreStable ==
 (*****************************************************************************)
 (* State constraint for model checking using TLC.                            *)
 (*****************************************************************************)
+MCTerm == 0 .. MaxTerm
 StateConstraint == \A s \in Server :
-    /\ term[s] <= MaxTerm
+    /\ term[s] \in MCTerm
     /\ Len(entries[s]) <= MaxEntries
 
 ===============================================================================
