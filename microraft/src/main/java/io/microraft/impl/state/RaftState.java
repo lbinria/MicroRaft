@@ -444,6 +444,8 @@ public final class RaftState {
         persistTerm(newTermState);
         if (termState.getTerm() != term)
             SpecHelper.getTermVariable(localEndpoint.getId().toString()).set(term);
+        else
+            SpecHelper.getTermVariable(localEndpoint.getId().toString()).apply("Unchanged");
 
         preCandidateState = null;
         LeaderState currentLeaderState = leaderState;

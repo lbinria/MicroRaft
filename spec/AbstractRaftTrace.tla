@@ -72,9 +72,6 @@ IsVote ==
         ELSE
             \E s \in Server : Vote(s)
 
-IsTest ==
-    /\ IsEvent("Vote")
-
 IsElectLeader ==
     /\ IsEvent("ElectLeader")
     /\

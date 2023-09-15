@@ -67,6 +67,10 @@ public class SpecHelper {
         return get(name).getVariable("commitIndex").getField(name);
     }
 
+    public static VirtualField getCommitIdx(String name) {
+        return get(name).getVariable("commitIdx").getField(name);
+    }
+
     public static VirtualField getMessages(String name) {
         return get(name).getVariable("messages");
     }

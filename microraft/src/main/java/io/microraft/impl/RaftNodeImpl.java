@@ -1635,10 +1635,6 @@ public final class RaftNodeImpl implements RaftNode {
         long commitIndex = state.commitIndex();
         RaftLog log = state.log();
 
-        // TLA
-        String tlaNodeName = getLocalEndpoint().getId().toString();
-        Object[] eventArgs = new Object[]{tlaNodeName};
-
         for (; quorumMatchIndex > commitIndex; quorumMatchIndex--) {
             // Only log entries from the leader’s current term are committed by counting
             // replicas; once an entry
@@ -1647,9 +1643,6 @@ public final class RaftNodeImpl implements RaftNode {
             // because of the Log Matching Property.
             LogEntry entry = log.getLogEntry(quorumMatchIndex);
             if (entry.getTerm() == state.term()) {
-                SpecHelper.getCommitIndex(getLocalEndpoint().getId().toString()).set(quorumMatchIndex);
-                SpecHelper.commitChanges(SpecHelper.get(getLocalEndpoint().getId().toString()), "Commit", eventArgs);
-                System.out.printf("ADVANCE COMMIT INDEX: %s.\n", quorumMatchIndex);
                 commitEntries(quorumMatchIndex);
                 return true;
             } else if (LOGGER.isDebugEnabled()) {
@@ -1668,8 +1661,19 @@ public final class RaftNodeImpl implements RaftNode {
             LOGGER.debug(localEndpointStr + " Setting commit index: " + commitIndex);
         }
 
+        // TLA
+        String tlaNodeName = getLocalEndpoint().getId().toString();
+        long oldCommitIndex = state.commitIndex();
         state.commitIndex(commitIndex);
+
         applyLogEntries();
+
+        for (long i = oldCommitIndex; i < commitIndex; i++) {
+            SpecHelper.getCommitIdx(getLocalEndpoint().getId().toString()).apply("Add", 1);
+            SpecHelper.commitChanges(SpecHelper.get(getLocalEndpoint().getId().toString()), "Commit",
+                    new Object[]{tlaNodeName});
+        }
+
         // the leader might have left the Raft group, but still we can send
         // an append request at this point
         broadcastAppendEntriesRequest();
