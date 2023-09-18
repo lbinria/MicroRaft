@@ -75,6 +75,7 @@ public class VoteResponseHandler extends AbstractResponseHandler<VoteResponse> {
                     response.getTerm(), state.term(), response);
             // TLA: to follower with update term
             node.toFollower(response.getTerm());
+            SpecHelper.commitChanges(node.getSpec(), "ResignLeader", new Object[]{localEndpoint().getId().toString()});
             return;
         } else if (response.getTerm() < state.term()) {
             LOGGER.warn("{} Stale {} is received, current term: {}", localEndpointStr(), response, state.term());

@@ -113,6 +113,7 @@ public class VoteRequestHandler extends AbstractMessageHandler<VoteRequest> {
                     state.term(), request);
 
             node.toFollower(candidateTerm);
+            SpecHelper.commitChanges(node.getSpec(), "ResignLeader", new Object[]{localEndpoint().getId().toString()});
         }
 
         if (state.leader() != null && !candidate.equals(state.leader())) {

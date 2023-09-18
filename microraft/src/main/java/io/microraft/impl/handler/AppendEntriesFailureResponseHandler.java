@@ -67,6 +67,7 @@ public class AppendEntriesFailureResponseHandler extends AbstractResponseHandler
             LOGGER.info("{} Switching to term: {} after {} from current term: {}", localEndpointStr(),
                     response.getTerm(), response, state.term());
             node.toFollower(response.getTerm());
+            SpecHelper.commitChanges(node.getSpec(), "ResignLeader", new Object[]{localEndpoint().getId().toString()});
             return;
         }
 

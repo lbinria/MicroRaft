@@ -89,9 +89,14 @@ ElectLeader(s) ==
 (* server notices that it is behind the term of the current leader.          *)
 (*****************************************************************************)
 ResignLeader(s) ==
+\*    /\ role[s] = "leader"
+\* allow anybody to update their term when they learn of a more recent one
     /\ role' = [role EXCEPT ![s] = "follower"]
     /\ \E t \in Term : t >= term[s] /\ term' = [term EXCEPT ![s] = t]
-    /\ UNCHANGED <<entries, commitIdx, votedFor>>
+    /\ IF term'[s] # term[s]
+       THEN votedFor' = [votedFor EXCEPT ![s] = None]
+       ELSE votedFor' = votedFor
+    /\ UNCHANGED <<entries, commitIdx>>
 
 (*****************************************************************************)
 (* A leader appends a new value to its log.                                  *)
@@ -99,7 +104,7 @@ ResignLeader(s) ==
 AppendEntry(s) ==
     /\ role[s] = "leader"
     /\ \E v \in Value : entries' = [entries EXCEPT ![s] =
-                                   Append(@, [val |-> v, term |-> term[s]])]
+                                    Append(@, [val |-> v, term |-> term[s]])]
     /\ UNCHANGED <<commitIdx, role, term, votedFor>>
 
 (*****************************************************************************)

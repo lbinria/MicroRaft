@@ -100,7 +100,7 @@ public class AppendEntriesRequestHandler extends AbstractMessageHandler<AppendEn
             LOGGER.info("{} Moving to new term: {} and leader: {} from current term: {}.", localEndpointStr(),
                     request.getTerm(), leader.getId(), state.term());
             node.toFollower(request.getTerm());
-            SpecHelper.getTermVariable(localEndpoint().getId().toString()).set(request.getTerm());
+            SpecHelper.commitChanges(node.getSpec(), "ResignLeader", new Object[]{localEndpoint().getId().toString()});
         }
 
         if (!leader.equals(state.leader())) {
